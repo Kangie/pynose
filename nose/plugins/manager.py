@@ -1,32 +1,24 @@
 """
 Plugin Manager
 --------------
-
 A plugin manager class is used to load plugins, manage the list of
 loaded plugins, and proxy calls to those plugins.
-
 The plugin managers provided with nose are:
-
 :class:`PluginManager`
     This manager doesn't implement loadPlugins, so it can only work
     with a static list of plugins.
-
 :class:`BuiltinPluginManager`
     This manager loads plugins referenced in ``nose.plugins.builtin``.
-
 :class:`EntryPointPluginManager`
     This manager uses setuptools entrypoints to load plugins.
-
 :class:`ExtraPluginsPluginManager`
     This manager loads extra plugins specified with the keyword
     `addplugins`.
-
 :class:`DefaultPluginMananger`
     This is the manager class that will be used by default. If
     setuptools is installed, it is a subclass of
     :class:`EntryPointPluginManager` and :class:`BuiltinPluginManager`;
     otherwise, an alias to :class:`BuiltinPluginManager`.
-
 :class:`RestrictedPluginManager`
     This manager is for use in test runs where some plugin calls are
     not available, such as runs started with ``python setup.py test``,
@@ -35,55 +27,38 @@ The plugin managers provided with nose are:
 
 Writing a plugin manager
 ========================
-
 If you want to load plugins via some other means, you can write a
 plugin manager and pass an instance of your plugin manager class when
 instantiating the :class:`nose.config.Config` instance that you pass to
 :class:`TestProgram` (or :func:`main` or :func:`run`).
-
 To implement your plugin loading scheme, implement ``loadPlugins()``,
 and in that method, call ``addPlugin()`` with an instance of each plugin
 you wish to make available. Make sure to call
 ``super(self).loadPlugins()`` as well if have subclassed a manager
-other than ``PluginManager``.
-
-"""
+other than ``PluginManager``."""
 import inspect
 import logging
 import os
 import sys
 from itertools import chain as iterchain
 from warnings import warn
-import nose.config
 from nose.failure import Failure
 from nose.plugins.base import IPluginInterface
 from nose.pyversion import sort_list
 
-try:
-    import cPickle as pickle
-except:
-    import pickle
-try:
-    from cStringIO import StringIO
-except:
-    from StringIO import StringIO
-
-
 __all__ = ['DefaultPluginManager', 'PluginManager', 'EntryPointPluginManager',
            'BuiltinPluginManager', 'RestrictedPluginManager']
-
 log = logging.getLogger(__name__)
 
 
 class PluginProxy(object):
     """Proxy for plugin calls. Essentially a closure bound to the
     given call and plugin list.
-
     The plugin proxy also must be bound to a particular plugin
     interface specification, so that it knows what calls are available
-    and any special handling that is required for each call.
-    """
+    and any special handling that is required for each call."""
     interface = IPluginInterface
+
     def __init__(self, call, plugins):
         try:
             self.method = getattr(self.interface, call)
@@ -99,22 +74,18 @@ class PluginProxy(object):
         return self.call(*arg, **kw)
 
     def addPlugin(self, plugin, call):
-        """Add plugin to my list of plugins to call, if it has the attribute
-        I'm bound to.
-        """
         meth = getattr(plugin, call, None)
         if meth is not None:
-            if call == 'loadTestsFromModule' and \
-                    len(inspect.getargspec(meth)[0]) == 2:
+            if (
+                call == 'loadTestsFromModule'
+                and len(inspect.getargspec(meth)[0]) == 2
+            ):
                 orig_meth = meth
-                meth = lambda module, path, **kwargs: orig_meth(module)
+                meth = lambda module, path, **kwargs: orig_meth(module)  # noqa
             self.plugins.append((plugin, meth))
 
     def makeCall(self, call):
         if call == 'loadTestsFromNames':
-            # special case -- load tests from names behaves somewhat differently
-            # from other chainable calls, because plugins return a tuple, only
-            # part of which can be chained to the next plugin.
             return self._loadTestsFromNames
 
         meth = self.method
@@ -124,13 +95,11 @@ class PluginProxy(object):
         elif getattr(meth, 'chainable', False):
             return self.chain
         else:
-            # return a value from the first plugin that returns non-None
             return self.simple
 
     def chain(self, *arg, **kw):
         """Call plugins in a chain, where the result of each plugin call is
-        sent to the next plugin as input. The final output result is returned.
-        """
+        sent to next plugin as input. The final output result is returned."""
         result = None
         # extract the static arguments (if any) from arg so they can
         # be passed to each plugin call in the chain
@@ -144,8 +113,7 @@ class PluginProxy(object):
         return result
 
     def generate(self, *arg, **kw):
-        """Call all plugins, yielding each item in each non-None result.
-        """
+        """Call all plugins, yielding each item in each non-None result."""
         for p, meth in self.plugins:
             result = None
             try:
@@ -155,14 +123,13 @@ class PluginProxy(object):
                         yield r
             except (KeyboardInterrupt, SystemExit):
                 raise
-            except:
+            except Exception:
                 exc = sys.exc_info()
                 yield Failure(*exc)
                 continue
 
     def simple(self, *arg, **kw):
-        """Call all plugins, returning the first non-None result.
-        """
+        """Call all plugins, returning the first non-None result."""
         for p, meth in self.plugins:
             result = meth(*arg, **kw)
             if result is not None:
@@ -172,8 +139,7 @@ class PluginProxy(object):
         """Chainable but not quite normal. Plugins return a tuple of
         (tests, names) after processing the names. The tests are added
         to a suite that is accumulated throughout the full call, while
-        names are input for the next plugin in the chain.
-        """
+        names are input for the next plugin in the chain."""
         suite = []
         for p, meth in self.plugins:
             result = meth(names, module=module)
@@ -187,6 +153,7 @@ class PluginProxy(object):
 class NoPlugins(object):
     """Null Plugin manager that has no plugins."""
     interface = IPluginInterface
+
     def __init__(self):
         self._plugins = self.plugins = ()
 
@@ -227,13 +194,10 @@ class PluginManager(object):
     used only with a static list of plugins. The loadPlugins() implementation
     only reloads plugins from _extraplugins to prevent those from being
     overridden by a subclass.
-
     The basic functionality of a plugin manager is to proxy all unknown
     attributes through a ``PluginProxy`` to a list of plugins.
-
     Note that the list of plugins *may not* be changed after the first plugin
-    call.
-    """
+    call."""
     proxyClass = PluginProxy
 
     def __init__(self, plugins=(), proxyClass=None):
@@ -267,8 +231,7 @@ class PluginManager(object):
     def addPlugins(self, plugins=(), extraplugins=()):
         """extraplugins are maintained in a separate list and
         re-added by loadPlugins() to prevent their being overwritten
-        by plugins added by a subclass of PluginManager
-        """
+        by plugins added by a subclass of PluginManager"""
         self._extraplugins = extraplugins
         for plug in iterchain(plugins, extraplugins):
             self.addPlugin(plug)
@@ -276,8 +239,7 @@ class PluginManager(object):
     def configure(self, options, config):
         """Configure the set of plugins with the given options
         and config instance. After configuration, disabled plugins
-        are removed from the plugins list.
-        """
+        are removed from the plugins list."""
         log.debug("Configuring plugins")
         self.config = config
         cfg = PluginProxy('configure', self._plugins)
@@ -292,7 +254,9 @@ class PluginManager(object):
             self.addPlugin(plug)
 
     def sort(self):
-        return sort_list(self._plugins, lambda x: getattr(x, 'score', 1), reverse=True)
+        return sort_list(
+            self._plugins, lambda x: getattr(x, 'score', 1), reverse=True
+        )
 
     def _get_plugins(self):
         return self._plugins
@@ -307,8 +271,6 @@ class PluginManager(object):
 
 
 class ZeroNinePlugin:
-    """Proxy for 0.9 plugins, adapts 0.10 calls to 0.9 standard.
-    """
     def __init__(self, plugin):
         self.plugin = plugin
 
@@ -318,7 +280,6 @@ class ZeroNinePlugin:
     def addError(self, test, err):
         if not hasattr(self.plugin, 'addError'):
             return
-        # switch off to addSkip, addDeprecated if those types
         from nose.exc import SkipTest, DeprecatedTest
         ec, ev, tb = err
         if issubclass(ec, SkipTest):
@@ -329,7 +290,6 @@ class ZeroNinePlugin:
             if not hasattr(self.plugin, 'addDeprecated'):
                 return
             return self.plugin.addDeprecated(test.test)
-        # add capt
         capt = test.capturedOutput
         return self.plugin.addError(test.test, err, capt)
 
@@ -340,7 +300,6 @@ class ZeroNinePlugin:
     def addFailure(self, test, err):
         if not hasattr(self.plugin, 'addFailure'):
             return
-        # add capt and tbinfo
         capt = test.capturedOutput
         tbinfo = test.tbinfo
         return self.plugin.addFailure(test.test, err, capt, tbinfo)
@@ -366,15 +325,12 @@ class ZeroNinePlugin:
 
 
 class EntryPointPluginManager(PluginManager):
-    """Plugin manager that loads plugins from the `nose.plugins` and
-    `nose.plugins.0.10` entry points.
-    """
+    """Plugin manager that loads plugins from `nose.plugins` entry points."""
     entry_points = (('nose.plugins.0.10', None),
                     ('nose.plugins', ZeroNinePlugin))
 
     def loadPlugins(self):
-        """Load plugins by iterating the `nose.plugins` entry point.
-        """
+        """Load plugins by iterating the `nose.plugins` entry point."""
         from pkg_resources import iter_entry_points
         loaded = {}
         for entry_point, adapt in self.entry_points:
@@ -387,10 +343,7 @@ class EntryPointPluginManager(PluginManager):
                     plugcls = ep.load()
                 except KeyboardInterrupt:
                     raise
-                except Exception, e:
-                    # never want a plugin load to kill the test run
-                    # but we can't log here because the logger is not yet
-                    # configured
+                except Exception as e:
                     warn("Unable to load plugin %s: %s" % (ep, e),
                          RuntimeWarning)
                     continue
@@ -403,32 +356,25 @@ class EntryPointPluginManager(PluginManager):
 
 
 class BuiltinPluginManager(PluginManager):
-    """Plugin manager that loads plugins from the list in
-    `nose.plugins.builtin`.
-    """
+    """Manager that loads plugins from the list in `nose.plugins.builtin`."""
     def loadPlugins(self):
-        """Load plugins in nose.plugins.builtin
-        """
         from nose.plugins import builtin
         for plug in builtin.plugins:
             self.addPlugin(plug())
         super(BuiltinPluginManager, self).loadPlugins()
 
+
 try:
-    import pkg_resources
     class DefaultPluginManager(EntryPointPluginManager, BuiltinPluginManager):
         pass
+
 
 except ImportError:
     class DefaultPluginManager(BuiltinPluginManager):
         pass
 
+
 class RestrictedPluginManager(DefaultPluginManager):
-    """Plugin manager that restricts the plugin list to those not
-    excluded by a list of exclude methods. Any plugin that implements
-    an excluded method will be removed from the manager's plugin list
-    after plugins are loaded.
-    """
     def __init__(self, plugins=(), exclude=(), load=True):
         DefaultPluginManager.__init__(self, plugins)
         self.load = load

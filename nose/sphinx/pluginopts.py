@@ -5,11 +5,11 @@ this::
 
  .. autoplugin :: nose.plugins.foo
     :plugin: Pluggy
-    
+
 produces::
 
   .. automodule :: nose.plugins.foo
-  
+
   Options
   -------
 
@@ -36,7 +36,7 @@ try:
     from docutils.statemachine import ViewList
     from docutils.parsers.rst import directives
 except ImportError:
-    pass # won't run anyway
+    pass
 
 from nose.util import resolve_name
 from nose.plugins.base import Plugin
@@ -50,7 +50,7 @@ def autoplugin_directive(dirname, arguments, options, content, lineno,
                          content_offset, block_text, state, state_machine):
     mod_name = arguments[0]
     mod = resolve_name(mod_name)
-    plug_name = options.get('plugin', None)
+    plug_name = options.get("plugin", None)
     if plug_name:
         obj = getattr(mod, plug_name)
     else:
@@ -59,17 +59,12 @@ def autoplugin_directive(dirname, arguments, options, content, lineno,
             if isclass(obj) and issubclass(obj, Plugin) and obj is not Plugin:
                 plug_name = '%s.%s' % (mod_name, entry)
                 break
-    
-    # mod docstring
     rst = ViewList()
     rst.append('.. automodule :: %s\n' % mod_name, '<autodoc>')
     rst.append('', '<autodoc>')
-    
-    # options
     rst.append('Options', '<autodoc>')
     rst.append('-------', '<autodoc>')
     rst.append('', '<autodoc>')
-
     plug = obj()
     opts = OptBucket()
     plug.options(opts, {})
@@ -78,18 +73,13 @@ def autoplugin_directive(dirname, arguments, options, content, lineno,
         rst.append('   \n', '<autodoc>')
         rst.append('   ' + opt.help + '\n', '<autodoc>')
         rst.append('\n', '<autodoc>')
-        
-    # plugin class
     rst.append('Plugin', '<autodoc>')
     rst.append('------', '<autodoc>')
     rst.append('', '<autodoc>')
-    
     rst.append('.. autoclass :: %s\n' % plug_name, '<autodoc>')
     rst.append('   :members:\n', '<autodoc>')
     rst.append('   :show-inheritance:\n', '<autodoc>')
     rst.append('', '<autodoc>')
-    
-    # source
     rst.append('Source', '<autodoc>')
     rst.append('------', '<autodoc>')
     rst.append(
@@ -99,7 +89,6 @@ def autoplugin_directive(dirname, arguments, options, content, lineno,
             '<autodoc>')
     rst.append('   :literal:\n', '<autodoc>')
     rst.append('', '<autodoc>')
-    
     node = nodes.section()
     node.document = state.document
     surrounding_title_styles = state.memo.title_styles
@@ -109,20 +98,17 @@ def autoplugin_directive(dirname, arguments, options, content, lineno,
     state.nested_parse(rst, 0, node, match_titles=1)
     state.memo.title_styles = surrounding_title_styles
     state.memo.section_level = surrounding_section_level
-
     return node.children
 
 
 def autohelp_directive(dirname, arguments, options, content, lineno,
                        content_offset, block_text, state, state_machine):
-    """produces rst from nose help"""
     config = Config(parserClass=OptBucket,
                     plugins=BuiltinPluginManager())
     parser = config.getParser(TestProgram.usage())
     rst = ViewList()
     for line in parser.format_help().split('\n'):
         rst.append(line, '<autodoc>')
-
     rst.append('Options', '<autodoc>')
     rst.append('-------', '<autodoc>')
     rst.append('', '<autodoc>')
@@ -130,7 +116,7 @@ def autohelp_directive(dirname, arguments, options, content, lineno,
         rst.append(opt.options(), '<autodoc>')
         rst.append('   \n', '<autodoc>')
         rst.append('   ' + opt.help + '\n', '<autodoc>')
-        rst.append('\n', '<autodoc>')    
+        rst.append('\n', '<autodoc>')
     node = nodes.section()
     node.document = state.document
     surrounding_title_styles = state.memo.title_styles
@@ -140,10 +126,9 @@ def autohelp_directive(dirname, arguments, options, content, lineno,
     state.nested_parse(rst, 0, node, match_titles=1)
     state.memo.title_styles = surrounding_title_styles
     state.memo.section_level = surrounding_section_level
-
     return node.children
 
-    
+
 class OptBucket(object):
     def __init__(self, doc=None, prog='nosetests'):
         self.opts = []
@@ -155,7 +140,7 @@ class OptBucket(object):
 
     def format_help(self):
         return self.doc.replace('%prog', self.prog).replace(':\n', '::\n')
-    
+
     def add_option(self, *arg, **kw):
         self.opts.append(Opt(*arg, **kw))
 
@@ -178,10 +163,9 @@ class Opt(object):
         return '.. cmdoption :: ' + ', '.join(buf)
 
     def meta(self, optstring):
-        # FIXME optparser default metavar?
         return self.metavar or 'DEFAULT'
 
-    
+
 def setup(app):
     app.add_directive('autoplugin',
                       autoplugin_directive, 1, (1, 0, 1),

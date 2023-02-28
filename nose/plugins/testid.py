@@ -1,6 +1,5 @@
-"""
-This plugin adds a test id (like #1) to each test name output. After
-you've run once to generate test ids, you can re-run individual
+"""This plugin adds a test id (like #1) to each test name output.
+After you've run once to generate test ids, you can re-run individual
 tests by activating the plugin and passing the ids (with or
 without the # prefix) instead of test names.
 
@@ -28,7 +27,7 @@ You can also pass multiple id numbers::
   % nosetests -v --with-id 2 3
   #2 tests.test_b ... ok
   #3 tests.test_c ... ok
-  
+
 Since most shells consider '#' a special character, you can leave it out when
 specifying a test id.
 
@@ -47,7 +46,7 @@ last time. Activate this mode with the ``--failed`` switch::
  #2 test.test_b ... ERROR
  #3 test.test_c ... FAILED
  #4 test.test_d ... ok
- 
+
 On the second run, only tests #2 and #3 will run::
 
  % nosetests -v --failed
@@ -75,7 +74,7 @@ First::
  #3 test.test_c ... ok
 
 Second::
- 
+
  % nosetests -v --failed
  #1 test.test_a ... ok
  #2 test.test_b ... ok
@@ -89,37 +88,28 @@ Second::
   created, allowing you to add ``--failed`` to the command line as soon as
   you have failing tests. Otherwise, your first run using ``--failed`` will
   (perhaps surprisingly) run *all* tests, because there won't be an id file
-  containing the record of failed tests from your previous run.
-  
-"""
+  containing the record of failed tests from your previous run. """
 __test__ = False
 
 import logging
 import os
 from nose.plugins import Plugin
-from nose.util import src, set
-
-try:
-    from cPickle import dump, load
-except ImportError:
-    from pickle import dump, load
+from nose.util import src
+from pickle import dump, load
 
 log = logging.getLogger(__name__)
 
 
 class TestId(Plugin):
-    """
-    Activate to add a test id (like #1) to each test name output. Activate
-    with --failed to rerun failing tests only.
-    """
+    """Activate to add a test id (like #1) to each test name output. Activate
+    with --failed to rerun failing tests only."""
     name = 'id'
     idfile = None
     collecting = True
     loopOnFailed = False
 
     def options(self, parser, env):
-        """Register commandline options.
-        """
+        """Register commandline options."""
         Plugin.options(self, parser, env)
         parser.add_option('--id-file', action='store', dest='testIdFile',
                           default='.noseids', metavar="FILE",
@@ -132,8 +122,7 @@ class TestId(Plugin):
                           "test run.")
 
     def configure(self, options, conf):
-        """Configure plugin.
-        """
+        """Configure plugin."""
         Plugin.configure(self, options, conf)
         if options.failed:
             self.enabled = True
@@ -155,12 +144,13 @@ class TestId(Plugin):
         self._write_hashes = conf.verbosity >= 2
 
     def finalize(self, result):
-        """Save new ids file, if needed.
-        """
+        """Save new ids file, if needed."""
         if result.wasSuccessful():
             self.failed = []
         if self.collecting:
-            ids = dict(list(zip(list(self.tests.values()), list(self.tests.keys()))))
+            ids = dict(
+                list(zip(list(self.tests.values()), list(self.tests.keys())))
+            )
         else:
             ids = self.ids
         fh = open(self.idfile, 'wb')
@@ -173,8 +163,7 @@ class TestId(Plugin):
 
     def loadTestsFromNames(self, names, module=None):
         """Translate ids in the list of requested names into their
-        test addresses, if they are found in my dict of tests.
-        """
+        test addresses, if they are found in my dict of tests."""
         log.debug('ltfn %s %s', names, module)
         try:
             fh = open(self.idfile, 'rb')
@@ -190,7 +179,9 @@ class TestId(Plugin):
                 self.source_names = names
             if self.ids:
                 self.id = max(self.ids) + 1
-                self.tests = dict(list(zip(list(self.ids.values()), list(self.ids.keys()))))
+                self.tests = dict(
+                    list(zip(list(self.ids.values()), list(self.ids.keys())))
+                )
             else:
                 self.id = 1
             log.debug(
@@ -198,10 +189,10 @@ class TestId(Plugin):
                 self.ids, self.tests, self.failed, self.source_names,
                 self.idfile)
             fh.close()
-        except ValueError, e:
-            # load() may throw a ValueError when reading the ids file, if it
-            # was generated with a newer version of Python than we are currently
-            # running.
+        except ValueError as e:
+            # load() may throw a ValueError when reading the ids file
+            # if it was generated with a newer version of Python
+            # than we are currently running.
             log.debug('Error loading %s : %s', self.idfile, str(e))
         except IOError:
             log.debug('IO error reading %s', self.idfile)
@@ -227,8 +218,7 @@ class TestId(Plugin):
             new_set = set(new_source)
             old_set = set(self.source_names)
             log.debug("old: %s new: %s", old_set, new_set)
-            really_new = [s for s in new_source
-                          if not s in old_set]
+            really_new = [s for s in new_source if s not in old_set]
             if really_new:
                 # remember new sources
                 self.source_names.extend(really_new)
@@ -255,8 +245,7 @@ class TestId(Plugin):
         return head
 
     def setOutputStream(self, stream):
-        """Get handle on output stream so the plugin can print id #s
-        """
+        """Get handle on output stream so the plugin can print id #s"""
         self.stream = stream
 
     def startTest(self, test):
@@ -265,9 +254,7 @@ class TestId(Plugin):
         Example output::
 
           #1 test.test ... ok
-          #2 test.test_two ... ok
-
-        """
+          #2 test.test_two ... ok """
         adr = test.address()
         log.debug('start test %s (%s)', adr, adr in self.tests)
         if adr in self.tests:

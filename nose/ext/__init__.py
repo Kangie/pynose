@@ -1,3 +1,1 @@
-"""
-External or vendor files
-"""
+"""External or vendor files"""

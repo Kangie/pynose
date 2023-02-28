@@ -7,9 +7,7 @@ and the profiler output file may be changed with ``--profile-stats-file``.
 See the `hotshot documentation`_ in the standard library documentation for
 more details on the various output options.
 
-.. _hotshot documentation: http://docs.python.org/library/hotshot.html
-"""
-
+.. _hotshot documentation: http://docs.python.org/library/hotshot.html """
 try:
     import hotshot
     from hotshot import stats
@@ -24,19 +22,20 @@ from nose.util import tolist
 
 log = logging.getLogger('nose.plugins')
 
+
 class Profile(Plugin):
-    """
-    Use this plugin to run tests using the hotshot profiler. 
-    """
+    """Use this plugin to run tests using the hotshot profiler. """
     pfile = None
     clean_stats_file = False
+
     def options(self, parser, env):
-        """Register commandline options.
-        """
+        """Register commandline options."""
         if not self.available():
             return
         Plugin.options(self, parser, env)
-        parser.add_option('--profile-sort', action='store', dest='profile_sort',
+        parser.add_option('--profile-sort',
+                          action='store',
+                          dest='profile_sort',
                           default=env.get('NOSE_PROFILE_SORT', 'cumulative'),
                           metavar="SORT",
                           help="Set sort order for profiler output")
@@ -55,19 +54,18 @@ class Profile(Plugin):
 
     def available(cls):
         return hotshot is not None
+
     available = classmethod(available)
 
     def begin(self):
-        """Create profile stats file and load profiler.
-        """
+        """Create profile stats file and load profiler."""
         if not self.available():
             return
         self._create_pfile()
         self.prof = hotshot.Profile(self.pfile)
 
     def configure(self, options, conf):
-        """Configure plugin.
-        """
+        """Configure plugin."""
         if not self.available():
             self.enabled = False
             return
@@ -84,19 +82,18 @@ class Profile(Plugin):
         self.restrict = tolist(options.profile_restrict)
 
     def prepareTest(self, test):
-        """Wrap entire test run in :func:`prof.runcall`.
-        """
+        """Wrap entire test run in :func:`prof.runcall`."""
         if not self.available():
             return
         log.debug('preparing test %s' % test)
+
         def run_and_profile(result, prof=self.prof, test=test):
             self._create_pfile()
             prof.runcall(test, result)
         return run_and_profile
 
     def report(self, stream):
-        """Output profiler report.
-        """
+        """Output profiler report."""
         log.debug('printing profiler report')
         self.prof.close()
         prof_stats = stats.load(self.pfile)
@@ -125,8 +122,7 @@ class Profile(Plugin):
                 sys.stdout = tmp
 
     def finalize(self, result):
-        """Clean up stats file, if configured to do so.
-        """
+        """Clean up stats file, if configured to do so."""
         if not self.available():
             return
         try:

@@ -13,19 +13,14 @@ More information: :doc:`../doc_tests/test_allmodules/test_allmodules`
    object in a module can't be loaded both by a plugin and the normal nose
    :class:`test loader <nose.loader.TestLoader>`. Also, if you have functions
    or classes in non-test modules that look like tests but aren't, you will
-   likely see errors as nose attempts to run them as tests.
-
-"""
-
-import os
+   likely see errors as nose attempts to run them as tests."""
 from nose.plugins.base import Plugin
 
+
 class AllModules(Plugin):
-    """Collect tests from all python modules.
-    """
+    """Collect tests from all python modules."""
     def options(self, parser, env):
-        """Register commandline options.
-        """
+        """Register commandline options."""
         env_opt = 'NOSE_ALL_MODULES'
         parser.add_option('--all-modules',
                           action="store_true",

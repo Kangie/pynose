@@ -1,13 +1,9 @@
 """
 Test Loader
 -----------
-
 nose's test loader implements the same basic functionality as its
 superclass, unittest.TestLoader, but extends it by more liberal
-interpretations of what may be a test and how a test may be named.
-"""
-from __future__ import generators
-
+interpretations of what may be a test and how a test may be named."""
 import logging
 import os
 import sys
@@ -25,31 +21,25 @@ from nose.util import func_lineno, getpackage, isclass, isgenerator, \
     transplant_class, test_address
 from nose.suite import ContextSuiteFactory, ContextList, LazySuite
 from nose.pyversion import sort_list, cmp_to_key
+import collections
 
 
 log = logging.getLogger(__name__)
-#log.setLevel(logging.DEBUG)
-
-# for efficiency and easier mocking
 op_normpath = os.path.normpath
 op_abspath = os.path.abspath
 op_join = os.path.join
 op_isdir = os.path.isdir
 op_isfile = os.path.isfile
-
-
 __all__ = ['TestLoader', 'defaultTestLoader']
 
 
 class TestLoader(unittest.TestLoader):
     """Test loader that extends unittest.TestLoader to:
-
     * Load tests from test-like functions and classes that are not
       unittest.TestCase subclasses
     * Find and load test modules in a directory
     * Support tests that are generators
-    * Support easy extensions of or changes to that behavior through plugins
-    """
+    * Support easy extensions of or changes to that behavior through plugins"""
     config = None
     importer = None
     workingDir = None
@@ -58,10 +48,7 @@ class TestLoader(unittest.TestLoader):
 
     def __init__(self, config=None, importer=None, workingDir=None,
                  selector=None):
-        """Initialize a test loader.
-
-        Parameters (all optional):
-
+        """Initialize a test loader. Parameters (all optional):
         * config: provide a `nose.config.Config`_ or other config class
           instance; if not provided a `nose.config.Config`_ with
           default values is used.
@@ -74,8 +61,7 @@ class TestLoader(unittest.TestLoader):
         * selector: a selector class or instance. If a class is
           provided, it will be instantiated with one argument, the
           current config. If not provided, a `nose.selector.Selector`_
-          is used.
-        """
+          is used."""
         if config is None:
             config = Config()
         if importer is None:
@@ -93,15 +79,10 @@ class TestLoader(unittest.TestLoader):
         if config.addPaths:
             add_path(workingDir, config)
         self.suiteClass = ContextSuiteFactory(config=config)
-
         self._visitedPaths = set([])
-
         unittest.TestLoader.__init__(self)
 
     def getTestCaseNames(self, testCaseClass):
-        """Override to select with selector, unless
-        config.getTestCaseNamesCompat is True
-        """
         if self.config.getTestCaseNamesCompat:
             return unittest.TestLoader.getTestCaseNames(self, testCaseClass)
 
@@ -113,9 +94,7 @@ class TestLoader(unittest.TestLoader):
                 return False
             return sel.wantMethod(item)
 
-        cases = filter(wanted, dir(testCaseClass))
-
-        # add runTest if nothing else picked
+        cases = list(filter(wanted, dir(testCaseClass)))
         if not cases and hasattr(testCaseClass, 'runTest'):
             cases = ['runTest']
         if self.sortTestMethodsUsing:
@@ -123,11 +102,8 @@ class TestLoader(unittest.TestLoader):
         return cases
 
     def _haveVisited(self, path):
-        # For cases where path is None, we always pretend we haven't visited
-        # them.
         if path is None:
             return False
-
         return path in self._visitedPaths
 
     def _addVisitedPath(self, path):
@@ -137,15 +113,12 @@ class TestLoader(unittest.TestLoader):
     def loadTestsFromDir(self, path):
         """Load tests from the directory at path. This is a generator
         -- each suite of tests from a module or other file is yielded
-        and is expected to be executed before the next file is
-        examined.
-        """
+        and is expected to be executed before the next file is examined."""
         log.debug("load from dir %s", path)
         plugins = self.config.plugins
         plugins.beforeDirectory(path)
         if self.config.addPaths:
             paths_added = add_path(path, self.config)
-
         entries = os.listdir(path)
         sort_list(entries, regex_last_key(self.config.testMatch))
         for entry in entries:
@@ -168,11 +141,9 @@ class TestLoader(unittest.TestLoader):
                         continue
                     wanted = self.selector.wantDirectory(entry_path)
             is_package = ispackage(entry_path)
-
-            # Python 3.3 now implements PEP 420: Implicit Namespace Packages.
-            # As a result, it's now possible that parent paths that have a
+            # It's now possible that parent paths that have a
             # segment with the same basename as our package ends up
-            # in module.__path__.  So we have to keep track of what we've
+            # in module.__path__. So we have to keep track of what we've
             # visited, and not-revisit them again.
             if wanted and not self._haveVisited(entry_path):
                 self._addVisitedPath(entry_path)
@@ -185,77 +156,64 @@ class TestLoader(unittest.TestLoader):
                         yield self.loadTestsFromFile(entry_path)
                     plugins.afterContext()
                 elif is_package:
-                    # Load the entry as a package: given the full path,
-                    # loadTestsFromName() will figure it out
                     yield self.loadTestsFromName(
                         entry_path, discovered=True)
                 else:
-                    # Another test dir in this one: recurse lazily
                     yield self.suiteClass(
                         lambda: self.loadTestsFromDir(entry_path))
         tests = []
         for test in plugins.loadTestsFromDir(path):
             tests.append(test)
-        # TODO: is this try/except needed?
         try:
             if tests:
                 yield self.suiteClass(tests)
         except (KeyboardInterrupt, SystemExit):
             raise
-        except:
+        except Exception:
             yield self.suiteClass([Failure(*sys.exc_info())])
-
-        # pop paths
         if self.config.addPaths:
             for p in paths_added:
-              remove_path(p)
+                remove_path(p)
         plugins.afterDirectory(path)
 
     def loadTestsFromFile(self, filename):
         """Load tests from a non-module file. Default is to raise a
         ValueError; plugins may implement `loadTestsFromFile` to
-        provide a list of tests loaded from the file.
-        """
+        provide a list of tests loaded from the file."""
         log.debug("Load from non-module file %s", filename)
         try:
             tests = [test for test in
                      self.config.plugins.loadTestsFromFile(filename)]
             if tests:
-                # Plugins can yield False to indicate that they were
-                # unable to load tests from a file, but it was not an
-                # error -- the file just had no tests to load.
-                tests = filter(None, tests)
+                tests = [_f for _f in tests if _f]
                 return self.suiteClass(tests)
             else:
-                # Nothing was able to even try to load from this file
-                open(filename, 'r').close() # trigger os error
+                open(filename, 'r').close()
                 raise ValueError("Unable to load tests from file %s"
                                  % filename)
         except (KeyboardInterrupt, SystemExit):
             raise
-        except:
+        except Exception:
             exc = sys.exc_info()
             return self.suiteClass(
                 [Failure(exc[0], exc[1], exc[2],
                          address=(filename, None, None))])
 
     def loadTestsFromGenerator(self, generator, module):
-        """Lazy-load tests from a generator function. The generator function
-        may yield either:
-
+        """Lazy-load tests from a generator function.
+        The generator function may yield either:
         * a callable, or
-        * a function name resolvable within the same module
-        """
+        * a function name resolvable within the same module """
         def generate(g=generator, m=module):
             try:
                 for test in g():
                     test_func, arg = self.parseGeneratedTest(test)
-                    if not callable(test_func):
+                    if not isinstance(test_func, collections.Callable):
                         test_func = getattr(m, test_func)
                     yield FunctionTestCase(test_func, arg=arg, descriptor=g)
             except KeyboardInterrupt:
                 raise
-            except:
+            except Exception:
                 exc = sys.exc_info()
                 yield Failure(exc[0], exc[1], exc[2],
                               address=test_address(generator))
@@ -263,18 +221,13 @@ class TestLoader(unittest.TestLoader):
 
     def loadTestsFromGeneratorMethod(self, generator, cls):
         """Lazy-load tests from a generator method.
-
         This is more complicated than loading from a generator function,
         since a generator method may yield:
-
         * a function
         * a bound or unbound method, or
-        * a method name
-        """
-        # convert the unbound generator method
-        # into a bound method so it can be called below
+        * a method name """
         if hasattr(generator, 'im_class'):
-            cls = generator.im_class
+            cls = generator.__self__.__class__
         inst = cls()
         method = generator.__name__
         generator = getattr(inst, method)
@@ -283,41 +236,31 @@ class TestLoader(unittest.TestLoader):
             try:
                 for test in g():
                     test_func, arg = self.parseGeneratedTest(test)
-                    if not callable(test_func):
+                    if not isinstance(test_func, collections.Callable):
                         test_func = unbound_method(c, getattr(c, test_func))
                     if ismethod(test_func):
                         yield MethodTestCase(test_func, arg=arg, descriptor=g)
-                    elif callable(test_func):
-                        # In this case we're forcing the 'MethodTestCase'
-                        # to run the inline function as its test call,
-                        # but using the generator method as the 'method of
-                        # record' (so no need to pass it as the descriptor)
+                    elif isinstance(test_func, collections.Callable):
                         yield MethodTestCase(g, test=test_func, arg=arg)
                     else:
                         yield Failure(
                             TypeError,
-                            "%s is not a callable or method" % test_func)
+                            "%s is not a callable or method" % test_func
+                        )
             except KeyboardInterrupt:
                 raise
-            except:
+            except Exception:
                 exc = sys.exc_info()
                 yield Failure(exc[0], exc[1], exc[2],
                               address=test_address(generator))
         return self.suiteClass(generate, context=generator, can_split=False)
 
     def loadTestsFromModule(self, module, path=None, discovered=False):
-        """Load all tests from module and return a suite containing
-        them. If the module has been discovered and is not test-like,
-        the suite will be empty by default, though plugins may add
-        their own tests.
-        """
+        """Load all tests from module and return a suite containing them."""
         log.debug("Load from module %s", module)
         tests = []
         test_classes = []
         test_funcs = []
-        # For *discovered* modules, we only load tests when the module looks
-        # testlike. For modules we've been directed to load, we always
-        # look for tests. (discovered is set to True by loadTestsFromDir)
         if not discovered or self.selector.wantModule(module):
             for item in dir(module):
                 test = getattr(module, item, None)
@@ -329,17 +272,13 @@ class TestLoader(unittest.TestLoader):
                     test_funcs.append(test)
             sort_list(test_classes, lambda x: x.__name__)
             sort_list(test_funcs, func_lineno)
-            tests = map(lambda t: self.makeTest(t, parent=module),
-                        test_classes + test_funcs)
-
-        # Now, descend into packages
-        # FIXME can or should this be lazy?
-        # is this syntax 2.2 compatible?
+            tests = [
+                self.makeTest(t, parent=module)
+                for t in test_classes + test_funcs
+            ]
         module_paths = getattr(module, '__path__', [])
-
         if path:
             path = os.path.normcase(os.path.realpath(path))
-
         for module_path in module_paths:
             log.debug("Load tests from module path %s?", module_path)
             log.debug("path: %s os.path.realpath(%s): %s",
@@ -352,46 +291,30 @@ class TestLoader(unittest.TestLoader):
                 # directory before trying to load from it.
                 if os.path.isdir(module_path):
                     tests.extend(self.loadTestsFromDir(module_path))
-
         for test in self.config.plugins.loadTestsFromModule(module, path):
             tests.append(test)
-
         return self.suiteClass(ContextList(tests, context=module))
 
     def loadTestsFromName(self, name, module=None, discovered=False):
         """Load tests from the entity with the given name.
-
         The name may indicate a file, directory, module, or any object
         within a module. See `nose.util.split_test_name` for details on
-        test name parsing.
-        """
-        # FIXME refactor this method into little bites?
+        test name parsing."""
         log.debug("load from %s (%s)", name, module)
-
         suite = self.suiteClass
-
-        # give plugins first crack
         plug_tests = self.config.plugins.loadTestsFromName(name, module)
         if plug_tests:
             return suite(plug_tests)
-
         addr = TestAddress(name, workingDir=self.workingDir)
         if module:
-            # Two cases:
-            #  name is class.foo
-            #    The addr will be incorrect, since it thinks class.foo is
-            #    a dotted module name. It's actually a dotted attribute
-            #    name. In this case we want to use the full submitted
-            #    name as the name to load from the module.
-            #  name is module:class.foo
-            #    The addr will be correct. The part we want is the part after
-            #    the :, which is in addr.call.
             if addr.call:
                 name = addr.call
             parent, obj = self.resolve(name, module)
-            if (isclass(parent)
+            if (
+                isclass(parent)
                 and getattr(parent, '__module__', None) != module.__name__
-                and not isinstance(obj, Failure)):
+                and not isinstance(obj, Failure)
+            ):
                 parent = transplant_class(parent, module.__name__)
                 obj = getattr(parent, obj.__name__)
             log.debug("parent %s obj %s module %s", parent, obj, module)
@@ -408,11 +331,6 @@ class TestLoader(unittest.TestLoader):
                     else:
                         self.config.plugins.beforeImport(
                             addr.filename, addr.module)
-                        # FIXME: to support module.name names,
-                        # do what resolve-name does and keep trying to
-                        # import, popping tail of module into addr.call,
-                        # until we either get an import or run out of
-                        # module parts
                         try:
                             module = self.importer.importFromPath(
                                 addr.filename, addr.module)
@@ -421,7 +339,7 @@ class TestLoader(unittest.TestLoader):
                                 addr.filename, addr.module)
                 except (KeyboardInterrupt, SystemExit):
                     raise
-                except:
+                except Exception:
                     exc = sys.exc_info()
                     return suite([Failure(exc[0], exc[1], exc[2],
                                           address=addr.totuple())])
@@ -445,31 +363,24 @@ class TestLoader(unittest.TestLoader):
                     return self.loadTestsFromName(addr.call, module=package)
                 else:
                     if op_isdir(path):
-                        # In this case we *can* be lazy since we know
-                        # that each module in the dir will be fully
-                        # loaded before its tests are executed; we
-                        # also know that we're not going to be asked
-                        # to load from . and ./some_module.py *as part
-                        # of this named test load*
-                        return LazySuite(
-                            lambda: self.loadTestsFromDir(path))
+                        return LazySuite(lambda: self.loadTestsFromDir(path))
                     elif op_isfile(path):
                         return self.loadTestsFromFile(path)
                     else:
                         return suite([
-                                Failure(OSError, "No such file %s" % path,
-                                        address=addr.totuple())])
+                            Failure(
+                                OSError,
+                                "No such file %s" % path,
+                                address=addr.totuple()
+                            )
+                        ])
             else:
-                # just a function? what to do? I think it can only be
-                # handled when module is not None
                 return suite([
                     Failure(ValueError, "Unresolvable test name %s" % name,
                             address=addr.totuple())])
 
     def loadTestsFromNames(self, names, module=None):
-        """Load tests from all names, returning a suite containing all
-        tests.
-        """
+        """Load tests from all names, returning a suite containing all tests"""
         plug_res = self.config.plugins.loadTestsFromNames(names, module)
         if plug_res:
             suite, names = plug_res
@@ -481,15 +392,11 @@ class TestLoader(unittest.TestLoader):
         return unittest.TestLoader.loadTestsFromNames(self, names, module)
 
     def loadTestsFromTestCase(self, testCaseClass):
-        """Load tests from a unittest.TestCase subclass.
-        """
+        """Load tests from a unittest.TestCase subclass."""
         cases = []
         plugins = self.config.plugins
         for case in plugins.loadTestsFromTestCase(testCaseClass):
             cases.append(case)
-        # For efficiency in the most common case, just call and return from
-        # super. This avoids having to extract cases and rebuild a context
-        # suite when there are no plugin-contributed cases.
         if not cases:
             return super(TestLoader, self).loadTestsFromTestCase(testCaseClass)
         cases.extend(
@@ -499,12 +406,7 @@ class TestLoader(unittest.TestLoader):
 
     def loadTestsFromTestClass(self, cls):
         """Load tests from a test class that is *not* a unittest.TestCase
-        subclass.
-
-        In this case, we can't depend on the class's `__init__` taking method
-        name arguments, so we have to compose a MethodTestCase for each
-        method in the class that looks testlike.
-        """
+        subclass."""
         def wanted(attr, cls=cls, sel=self.selector):
             item = getattr(cls, attr, None)
             if isfunction(item):
@@ -523,44 +425,42 @@ class TestLoader(unittest.TestLoader):
             return self._makeTest(obj, parent)
         except (KeyboardInterrupt, SystemExit):
             raise
-        except:
+        except Exception:
             exc = sys.exc_info()
             try:
                 addr = test_address(obj)
             except KeyboardInterrupt:
                 raise
-            except:
+            except Exception:
                 addr = None
             return Failure(exc[0], exc[1], exc[2], address=addr)
 
     def _makeTest(self, obj, parent=None):
         """Given a test object and its parent, return a test case
-        or test suite.
-        """
+        or test suite."""
         plug_tests = []
         try:
             addr = test_address(obj)
         except KeyboardInterrupt:
             raise
-        except:
+        except Exception:
             addr = None
         for test in self.config.plugins.makeTest(obj, parent):
             plug_tests.append(test)
-        # TODO: is this try/except needed?
         try:
             if plug_tests:
                 return self.suiteClass(plug_tests)
         except (KeyboardInterrupt, SystemExit):
             raise
-        except:
+        except Exception:
             exc = sys.exc_info()
             return Failure(exc[0], exc[1], exc[2], address=addr)
-
-        if isfunction(obj) and parent and not isinstance(parent, types.ModuleType):
-	    # This is a Python 3.x 'unbound method'.  Wrap it with its
-	    # associated class..
+        if (
+            isfunction(obj)
+            and parent
+            and not isinstance(parent, types.ModuleType)
+        ):
             obj = unbound_method(parent, obj)
-
         if isinstance(obj, unittest.TestCase):
             return obj
         elif isclass(obj):
@@ -593,31 +493,26 @@ class TestLoader(unittest.TestLoader):
                            address=addr)
 
     def resolve(self, name, module):
-        """Resolve name within module
-        """
+        """Resolve name within module."""
         obj = module
         parts = name.split('.')
         for part in parts:
             parent, obj = obj, getattr(obj, part, None)
         if obj is None:
-            # no such test
             obj = Failure(ValueError, "No such test %s" % name)
         return parent, obj
 
     def parseGeneratedTest(self, test):
         """Given the yield value of a test generator, return a func and args.
-
-        This is used in the two loadTestsFromGenerator* methods.
-
-        """
-        if not isinstance(test, tuple):         # yield test
+        This is used in the two loadTestsFromGenerator* methods."""
+        if not isinstance(test, tuple):  # yield test
             test_func, arg = (test, tuple())
-        elif len(test) == 1:                    # yield (test,)
+        elif len(test) == 1:  # yield (test,)
             test_func, arg = (test[0], tuple())
-        else:                                   # yield test, foo, bar, ...
-            assert len(test) > 1 # sanity check
+        else:  # yield test, foo, bar, ...
+            assert len(test) > 1  # sanity check
             test_func, arg = (test[0], test[1:])
         return test_func, arg
 
-defaultTestLoader = TestLoader
 
+defaultTestLoader = TestLoader

@@ -1,44 +1,32 @@
 """
 Result Proxy
 ------------
-
 The result proxy wraps the result instance given to each test. It
 performs two functions: enabling extended error/failure reporting
 and calling plugins.
-
-As each result event is fired, plugins are called with the same event;
-however, plugins are called with the nose.case.Test instance that
-wraps the actual test. So when a test fails and calls
-result.addFailure(self, err), the result proxy calls
-addFailure(self.test, err) for each plugin. This allows plugins to
-have a single stable interface for all test types, and also to
-manipulate the test object itself by setting the `test` attribute of
-the nose.case.Test that they receive.
-"""
+When a test fails and calls result.addFailure(self, err),
+the result proxy calls addFailure(self.test, err) for each plugin."""
 import logging
 from nose.config import Config
-
 
 log = logging.getLogger(__name__)
 
 
 def proxied_attribute(local_attr, proxied_attr, doc):
-    """Create a property that proxies attribute ``proxied_attr`` through
-    the local attribute ``local_attr``.
-    """
     def fget(self):
         return getattr(getattr(self, local_attr), proxied_attr)
+
     def fset(self, value):
         setattr(getattr(self, local_attr), proxied_attr, value)
+
     def fdel(self):
         delattr(getattr(self, local_attr), proxied_attr)
+
     return property(fget, fset, fdel, doc)
 
 
 class ResultProxyFactory(object):
-    """Factory for result proxies. Generates a ResultProxy bound to each test
-    and the result passed to the test.
-    """
+    """Generates a ResultProxy bound to each test, and the result."""
     def __init__(self, config=None):
         if config is None:
             config = Config()
@@ -48,12 +36,10 @@ class ResultProxyFactory(object):
 
     def __call__(self, result, test):
         """Return a ResultProxy for the current test.
-
         On first call, plugins are given a chance to replace the
         result used for the remaining tests. If a plugin returns a
         value from prepareTestResult, that object will be used as the
-        result for all tests.
-        """
+        result for all tests."""
         if not self.__prepared:
             self.__prepared = True
             plug_result = self.config.plugins.prepareTestResult(result)
@@ -66,14 +52,9 @@ class ResultProxyFactory(object):
 
 class ResultProxy(object):
     """Proxy to TestResults (or other results handler).
-
     One ResultProxy is created for each nose.case.Test. The result
     proxy calls plugins with the nose.case.Test instance (instead of
-    the wrapped test case) as each result call is made. Finally, the
-    real result method is called, also with the nose.case.Test
-    instance as the test parameter.
-
-    """
+    the wrapped test case) as each result call is made."""
     def __init__(self, result, test, config=None):
         if config is None:
             config = Config()
@@ -87,7 +68,7 @@ class ResultProxy(object):
 
     def _prepareErr(self, err):
         if not isinstance(err[1], Exception) and isinstance(err[0], type):
-            # Turn value back into an Exception (required in Python 3.x).
+            # Turn value back into an Exception.
             # Plugins do all sorts of crazy things with exception values.
             # Convert it to a custom subclass of Exception with the same
             # name as the actual exception to make it print correctly.
@@ -98,7 +79,6 @@ class ResultProxy(object):
     def assertMyTest(self, test):
         # The test I was called with must be my .test or my
         # .test's .test. or my .test.test's .case
-
         case = getattr(self.test, 'test', None)
         assert (test is self.test
                 or test is case
@@ -124,7 +104,6 @@ class ResultProxy(object):
         plugin_handled = plugins.handleError(self.test, err)
         if plugin_handled:
             return
-        # test.passed is set in result, to account for error classes
         formatted = plugins.formatError(self.test, err)
         if formatted is not None:
             err = formatted
@@ -149,12 +128,10 @@ class ResultProxy(object):
             self.shouldStop = True
 
     def addSkip(self, test, reason):
-        # 2.7 compat shim
         from nose.plugins.skip import SkipTest
         self.assertMyTest(test)
         plugins = self.plugins
         if not isinstance(reason, Exception):
-            # for Python 3.2+
             reason = Exception(reason)
         plugins.addError(self.test, (SkipTest, reason, None))
         self.result.addSkip(self.test, reason)
@@ -177,12 +154,15 @@ class ResultProxy(object):
         self.plugins.stopTest(self.test)
         self.result.stopTest(self.test)
 
-    # proxied attributes
-    shouldStop = proxied_attribute('result', 'shouldStop',
-                                    """Should the test run stop?""")
-    errors = proxied_attribute('result', 'errors',
-                               """Tests that raised an exception""")
-    failures = proxied_attribute('result', 'failures',
-                                 """Tests that failed""")
-    testsRun = proxied_attribute('result', 'testsRun',
-                                 """Number of tests run""")
+    shouldStop = proxied_attribute(
+        'result', 'shouldStop', """Should the test run stop?"""
+    )
+    errors = proxied_attribute(
+        'result', 'errors', """Tests that raised an exception"""
+    )
+    failures = proxied_attribute(
+        'result', 'failures', """Tests that failed"""
+    )
+    testsRun = proxied_attribute(
+        'result', 'testsRun', """Number of tests run"""
+    )

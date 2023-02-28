@@ -1,11 +1,10 @@
 """
 nosetests setuptools command
 ----------------------------
-
 The easiest way to run tests with nose is to use the `nosetests` setuptools
-command::
+command:
 
-  python setup.py nosetests
+    python setup.py nosetests
 
 This command has one *major* benefit over the standard `test` command: *all
 nose plugins are supported*.
@@ -19,7 +18,7 @@ line and adding it to setup.cfg are:
 * In setup.cfg, command line flags that take no arguments must be given an
   argument flag (1, T or TRUE for active, 0, F or FALSE for inactive)
 
-Here's an example [nosetests] setup.cfg section::
+Here's an example [nosetests] setup.cfg section:
 
   [nosetests]
   verbosity=1
@@ -45,20 +44,17 @@ script.
 
 Bootstrapping
 -------------
-
 If you are distributing your project and want users to be able to run tests
 without having to install nose themselves, add nose to the setup_requires
-section of your setup()::
+section of your setup():
 
-  setup(
-      # ...
-      setup_requires=['nose>=1.0']
-      )
+setup(
+    # ...
+    setup_requires=['pynose>=1.3.9']
+)
 
 This will direct setuptools to download and activate nose during the setup
-process, making the ``nosetests`` command available.
-
-"""
+process, making the ``nosetests`` command available."""
 try:
     from setuptools import Command
 except ImportError:
@@ -69,72 +65,59 @@ else:
     from nose.core import TestProgram
     from nose.plugins import DefaultPluginManager
 
-
     def get_user_options(parser):
         """convert a optparse option list into a distutils option tuple list"""
         opt_list = []
         for opt in parser.option_list:
-            if opt._long_opts[0][2:] in option_blacklist: 
+            if opt._long_opts[0][2:] in option_blacklist:
                 continue
             long_name = opt._long_opts[0][2:]
             if opt.action not in ('store_true', 'store_false'):
                 long_name = long_name + "="
             short_name = None
             if opt._short_opts:
-                short_name =  opt._short_opts[0][1:]
+                short_name = opt._short_opts[0][1:]
             opt_list.append((long_name, short_name, opt.help or ""))
         return opt_list
 
-
     class nosetests(Command):
         description = "Run unit tests using nosetests"
-        __config = Config(files=user_config_files(),
-                          plugins=DefaultPluginManager())
+        __config = Config(
+            files=user_config_files(), plugins=DefaultPluginManager()
+        )
         __parser = __config.getParser()
         user_options = get_user_options(__parser)
 
         def initialize_options(self):
-            """create the member variables, but change hyphens to
-            underscores
-            """
-
+            """create member variables, but change hyphens to underscores"""
             self.option_to_cmds = {}
             for opt in self.__parser.option_list:
                 cmd_name = opt._long_opts[0][2:]
                 option_name = cmd_name.replace('-', '_')
                 self.option_to_cmds[option_name] = cmd_name
                 setattr(self, option_name, None)
-            self.attr  = None
+            self.attr = None
 
         def finalize_options(self):
-            """nothing to do here"""
             pass
 
         def run(self):
             """ensure tests are capable of being run, then
             run nose.main with a reconstructed argument list"""
             if getattr(self.distribution, 'use_2to3', False):
-                # If we run 2to3 we can not do this inplace:
-
-                # Ensure metadata is up-to-date
                 build_py = self.get_finalized_command('build_py')
                 build_py.inplace = 0
                 build_py.run()
                 bpy_cmd = self.get_finalized_command("build_py")
                 build_path = bpy_cmd.build_lib
-
-                # Build extensions
                 egg_info = self.get_finalized_command('egg_info')
                 egg_info.egg_base = build_path
                 egg_info.run()
-
                 build_ext = self.get_finalized_command('build_ext')
                 build_ext.inplace = 0
                 build_ext.run()
             else:
                 self.run_command('egg_info')
-
-                # Build extensions in-place
                 build_ext = self.get_finalized_command('build_ext')
                 build_ext.inplace = 1
                 build_ext.run()
@@ -147,8 +130,8 @@ else:
                     self.distribution.tests_require)
 
             ei_cmd = self.get_finalized_command("egg_info")
-            argv = ['nosetests', '--where', ei_cmd.egg_base] 
-            for (option_name, cmd_name) in self.option_to_cmds.items():
+            argv = ['nosetests', '--where', ei_cmd.egg_base]
+            for (option_name, cmd_name) in list(self.option_to_cmds.items()):
                 if option_name in option_blacklist:
                     continue
                 value = getattr(self, option_name)

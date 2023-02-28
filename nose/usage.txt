@@ -1,4 +1,4 @@
-nose collects tests automatically from python source files,
+pynose / nose collects tests automatically from python source files,
 directories and packages found in its working directory (which
 defaults to the current working directory). Any python source file,
 directory or package that matches the testMatch regular expression
@@ -27,29 +27,29 @@ Selecting Tests
 
 To specify which tests to run, pass test names on the command line:
 
-  %prog only_test_this.py
+  nosetests only_test_this.py
   
 Test names specified may be file or module names, and may optionally
 indicate the test case to run by separating the module or file name
 from the test case name with a colon. Filenames may be relative or
 absolute. Examples:
 
-  %prog test.module
-  %prog another.test:TestCase.test_method
-  %prog a.test:TestCase
-  %prog /path/to/test/file.py:test_function
+  nosetests test.module
+  nosetests another.test:TestCase.test_method
+  nosetests a.test:TestCase
+  nosetests /path/to/test/file.py:test_function
   
 You may also change the working directory where nose looks for tests
 by using the -w switch:
 
-  %prog -w /path/to/tests
+  nosetests -w /path/to/tests
 
 Note, however, that support for multiple -w arguments is now deprecated
 and will be removed in a future release. As of nose 0.10, you can get
 the same behavior by specifying the target directories *without*
 the -w switch:
 
-  %prog /path/to/tests /another/path/to/tests
+  nosetests /path/to/tests /another/path/to/tests
 
 Further customization of test selection and loading is possible
 through the use of plugins.
@@ -94,22 +94,3 @@ about each plugin.
 If you are running nose.main() or nose.run() from a script, you
 can specify a list of plugins to use by passing a list of plugins
 with the plugins keyword argument.
-
-0.9 plugins
------------
-
-nose 1.0 can use SOME plugins that were written for nose 0.9. The
-default plugin manager inserts a compatibility wrapper around 0.9
-plugins that adapts the changed plugin api calls. However, plugins
-that access nose internals are likely to fail, especially if they
-attempt to access test case or test suite classes. For example,
-plugins that try to determine if a test passed to startTest is an
-individual test or a suite will fail, partly because suites are no
-longer passed to startTest and partly because it's likely that the
-plugin is trying to find out if the test is an instance of a class
-that no longer exists.
-
-0.10 and 0.11 plugins
----------------------
-
-All plugins written for nose 0.10 and 0.11 should work with nose 1.0.

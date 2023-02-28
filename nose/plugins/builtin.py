@@ -1,6 +1,4 @@
-"""
-Lists builtin plugins.
-"""
+"""Lists builtin plugins."""
 plugins = []
 builtins = (
     ('nose.plugins.attrib', 'AttributeSelector'),
@@ -19,16 +17,15 @@ builtins = (
     ('nose.plugins.xunit', 'Xunit'),
     ('nose.plugins.allmodules', 'AllModules'),
     ('nose.plugins.collect', 'CollectOnly'),
-    )
+)
 
 for module, cls in builtins:
     try:
         plugmod = __import__(module, globals(), locals(), [cls])
     except KeyboardInterrupt:
         raise
-    except:
+    except Exception:
         continue
     plug = getattr(plugmod, cls)
     plugins.append(plug)
     globals()[cls] = plug
-

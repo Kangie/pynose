@@ -1,125 +1,111 @@
-import sys
+from setuptools import setup
 import os
+import sys
 
-VERSION = '1.3.7'
-py_vers_tag = '-%s.%s' % sys.version_info[:2]
-
-test_dirs = ['functional_tests', 'unit_tests', os.path.join('doc','doc_tests'), 'nose']
-
-if sys.version_info >= (3,):
-    try:
-        import setuptools
-    except ImportError:
-        from distribute_setup import use_setuptools
-        use_setuptools()
-
-    extra = {'use_2to3': True,
-             'test_dirs': test_dirs,
-             'test_build_dir': 'build/tests',
-             'pyversion_patching': True,
-             }
-else:
-    extra = {}
-
+this_dir = os.path.abspath(os.path.dirname(__file__))
+description = "pynose fixes nose to extend unittest and make testing easier"
+long_description = None
+total_description = None
 try:
-    from setup3lib import setup
-    from setuptools import find_packages
-    addl_args = dict(
-        zip_safe = False,
-        packages = find_packages(),
-        entry_points = {
-        'console_scripts': [
-            'nosetests = nose:run_exit',
-            'nosetests%s = nose:run_exit' % py_vers_tag,
-            ],
-        'distutils.commands': [
-            ' nosetests = nose.commands:nosetests',
-            ],
-        },
-        test_suite = 'nose.collector',
-        )
-    addl_args.update(extra)
+    with open(os.path.join(this_dir, "README.md"), "rb") as f:
+        total_description = f.read().decode("utf-8")
+    description_lines = total_description.split("\n")
+    long_description_lines = []
+    for line in description_lines:
+        if not line.startswith("<meta ") and not line.startswith("<link "):
+            long_description_lines.append(line)
+    long_description = "\n".join(long_description_lines)
+except IOError:
+    long_description = description
 
-    # This is required by multiprocess plugin; on Windows, if
-    # the launch script is not import-safe, spawned processes
-    # will re-run it, resulting in an infinite loop.
-    if sys.platform == 'win32':
-        import re
-        from setuptools.command.easy_install import easy_install
+about = {}
+# Get the package version from the nose/__version__.py file
+with open(os.path.join(this_dir, "nose", "__version__.py"), "rb") as f:
+    exec(f.read().decode("utf-8"), about)
+VERSION = about["__version__"]
 
-        def wrap_write_script(self, script_name, contents, *arg, **kwarg):
-            if script_name.endswith('.exe'):
-                return self._write_script(script_name, contents, *arg, **kwarg)
+if sys.argv[-1] == "publish":
+    reply = None
+    input_method = input
+    confirm_text = ">>> Confirm release PUBLISH to PyPI? (yes/no): "
+    reply = str(input_method(confirm_text)).lower().strip()
+    if reply == "yes":
+        print("\n*** Checking code health with flake8:\n")
+        if sys.version_info >= (3, 9):
+            os.system("python -m pip install 'flake8==6.0.0'")
+        else:
+            os.system("python -m pip install 'flake8==5.0.4'")
+        flake8_status = os.system("flake8 --exclude=recordings,temp")
+        if flake8_status != 0:
+            print("\nWARNING! Fix flake8 issues before publishing to PyPI!\n")
+            sys.exit()
+        else:
+            print("*** No flake8 issues detected. Continuing...")
+        print("\n*** Removing existing distribution packages: ***\n")
+        os.system("rm -f dist/*.egg; rm -f dist/*.tar.gz; rm -f dist/*.whl")
+        os.system("rm -rf build/bdist.*; rm -rf build/lib")
+        print("\n*** Installing build: *** (Required for PyPI uploads)\n")
+        os.system("python -m pip install --upgrade 'build>=0.10.0'")
+        print("\n*** Installing pkginfo: *** (Required for PyPI uploads)\n")
+        os.system("python -m pip install --upgrade 'pkginfo>=1.9.6'")
+        print("\n*** Installing twine: *** (Required for PyPI uploads)\n")
+        os.system("python -m pip install --upgrade 'twine>=4.0.2'")
+        print("\n*** Installing tqdm: *** (Required for PyPI uploads)\n")
+        os.system("python -m pip install --upgrade tqdm")
+        print("\n*** Rebuilding distribution packages: ***\n")
+        os.system("python -m build")  # Create new tar/wheel
+        print("\n*** Publishing The Release to PyPI: ***\n")
+        os.system("python -m twine upload dist/*")  # Requires ~/.pypirc Keys
+        print("\n*** The Release was PUBLISHED SUCCESSFULLY to PyPI! :) ***\n")
+    else:
+        print("\n>>> The Release was NOT PUBLISHED to PyPI! <<<\n")
+    sys.exit()
 
-            bad_text = re.compile(
-                "\n"
-                "sys.exit\(\n"
-                "   load_entry_point\(([^\)]+)\)\(\)\n"
-                "\)\n")
-            good_text = (
-                "\n"
-                "if __name__ == '__main__':\n"
-                "    sys.exit(\n"
-                r"        load_entry_point(\1)()\n"
-                "    )\n"
-                )
-            contents = bad_text.sub(good_text, contents)
-            return self._write_script(script_name, contents, *arg, **kwarg)
-        easy_install._write_script = easy_install.write_script
-        easy_install.write_script = wrap_write_script
-
-except ImportError:
-    from distutils.core import setup
-    addl_args = dict(
-        packages = ['nose', 'nose.ext', 'nose.plugins', 'nose.sphinx',
-                    'nose.tools'],
-        scripts = ['bin/nosetests'],
-        )
+addl_args = dict(
+    packages=[
+        "nose", "nose.ext", "nose.plugins", "nose.sphinx", "nose.tools"
+    ],
+    scripts=["bin/nosetests", "bin/pynose"],
+)
 
 setup(
-    name = 'nose',
-    version = VERSION,
-    author = 'Jason Pellerin',
-    author_email = 'jpellerin+nose@gmail.com',
-    description = ('nose extends unittest to make testing easier'),
-    long_description = \
-    """nose extends the test loading and running features of unittest, making
-    it easier to write, find and run tests.
-
-    By default, nose will run tests in files or directories under the current
-    working directory whose names include "test" or "Test" at a word boundary
-    (like "test_this" or "functional_test" or "TestClass" but not
-    "libtest"). Test output is similar to that of unittest, but also includes
-    captured stdout output from failing tests, for easy print-style debugging.
-
-    These features, and many more, are customizable through the use of
-    plugins. Plugins included with nose provide support for doctest, code
-    coverage and profiling, flexible attribute-based test selection,
-    output capture and more. More information about writing plugins may be
-    found on in the nose API documentation, here:
-    http://readthedocs.org/docs/nose/
-
-    If you have recently reported a bug marked as fixed, or have a craving for
-    the very latest, you may want the development version instead:
-    https://github.com/nose-devs/nose/tarball/master#egg=nose-dev
-    """,
-    license = 'GNU LGPL',
-    keywords = 'test unittest doctest automatic discovery',
-    url = 'http://readthedocs.org/docs/nose/',
-    data_files = [('man/man1', ['nosetests.1'])],
-    package_data = {'': ['*.txt',
-                         'examples/*.py',
-                         'examples/*/*.py']},
-    classifiers = [
-        'Development Status :: 5 - Production/Stable',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL)',
-        'Natural Language :: English',
-        'Operating System :: OS Independent',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 3',
-        'Topic :: Software Development :: Testing'
-        ],
+    name="pynose",
+    version=VERSION,
+    author="Michael Mintz",
+    author_email="mdmintz@gmail.com",
+    description=description,
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    license="MIT",
+    keywords="test unittest doctest automatic discovery",
+    url="https://github.com/mdmintz/pynose",
+    project_urls={
+        "Download": "https://pypi.org/project/pynose/#files",
+        "PyPI": "https://pypi.org/project/pynose/",
+        "Source": "https://github.com/mdmintz/pynose",
+        "Documentation": "https://nose.readthedocs.io/en/latest/",
+    },
+    package_data={"": ["*.txt"]},
+    python_requires=">=3.6",
+    classifiers=[
+        "Development Status :: 5 - Production/Stable",
+        "Environment :: Console",
+        "Environment :: MacOS X",
+        "Environment :: Win32 (MS Windows)",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: MIT License",
+        "Natural Language :: English",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Topic :: Software Development :: Testing",
+    ],
     **addl_args
-    )
-
+)

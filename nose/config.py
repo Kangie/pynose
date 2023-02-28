@@ -3,30 +3,25 @@ import optparse
 import os
 import re
 import sys
-import ConfigParser
+import configparser
 from optparse import OptionParser
 from nose.util import absdir, tolist
 from nose.plugins.manager import NoPlugins
 from warnings import warn, filterwarnings
 
 log = logging.getLogger(__name__)
-
-# not allowed in config files
-option_blacklist = ['help', 'verbose']
-
+option_blacklist = ['help', 'verbose']  # not allowed in config files
 config_files = [
     # Linux users will prefer this
     "~/.noserc",
     # Windows users will prefer this
     "~/nose.cfg"
-    ]
-
-# plaforms on which the exe check defaults to off
-# Windows and IronPython
+]
 exe_allowed_platforms = ('win32', 'cli')
 
 filterwarnings("always", category=DeprecationWarning,
                module=r'(.*\.)?nose\.config')
+
 
 class NoSuchOptionError(Exception):
     def __init__(self, name):
@@ -39,9 +34,7 @@ class ConfigError(Exception):
 
 
 class ConfiguredDefaultsOptionParser(object):
-    """
-    Handler for options from commandline and config files.
-    """
+    """Handler for options from commandline and config files."""
     def __init__(self, parser, config_section, error=None, file_error=None):
         self._parser = parser
         self._config_section = config_section
@@ -49,7 +42,7 @@ class ConfiguredDefaultsOptionParser(object):
             error = self._parser.error
         self._error = error
         if file_error is None:
-            file_error = lambda msg, **kw: error(msg)
+            file_error = lambda msg, **kw: error(msg)  # noqa: E731
         self._file_error = file_error
 
     def _configTuples(self, cfg, filename):
@@ -62,24 +55,24 @@ class ConfiguredDefaultsOptionParser(object):
     def _readFromFilenames(self, filenames):
         config = []
         for filename in filenames:
-            cfg = ConfigParser.RawConfigParser()
+            cfg = configparser.RawConfigParser()
             try:
                 cfg.read(filename)
-            except ConfigParser.Error, exc:
+            except configparser.Error as exc:
                 raise ConfigError("Error reading config file %r: %s" %
                                   (filename, str(exc)))
             config.extend(self._configTuples(cfg, filename))
         return config
 
     def _readFromFileObject(self, fh):
-        cfg = ConfigParser.RawConfigParser()
+        cfg = configparser.RawConfigParser()
         try:
             filename = fh.name
         except AttributeError:
             filename = '<???>'
         try:
             cfg.readfp(fh)
-        except ConfigParser.Error, exc:
+        except configparser.Error as exc:
             raise ConfigError("Error reading config file %r: %s" %
                               (filename, str(exc)))
         return self._configTuples(cfg, filename)
@@ -89,7 +82,7 @@ class ConfiguredDefaultsOptionParser(object):
             config_files.readline
         except AttributeError:
             filename_or_filenames = config_files
-            if isinstance(filename_or_filenames, basestring):
+            if isinstance(filename_or_filenames, str):
                 filenames = [filename_or_filenames]
             else:
                 filenames = filename_or_filenames
@@ -113,12 +106,12 @@ class ConfiguredDefaultsOptionParser(object):
                 continue
             try:
                 self._processConfigValue(name, value, values, parser)
-            except NoSuchOptionError, exc:
+            except NoSuchOptionError as exc:
                 self._file_error(
                     "Error reading config file %r: "
                     "no such option %r" % (filename, exc.name),
                     name=name, filename=filename)
-            except optparse.OptionValueError, exc:
+            except optparse.OptionValueError as exc:
                 msg = str(exc).replace('--' + name, repr(name), 1)
                 self._file_error("Error reading config file %r: "
                                  "%s" % (filename, msg),
@@ -128,23 +121,21 @@ class ConfiguredDefaultsOptionParser(object):
         values = self._parser.get_default_values()
         try:
             config = self._readConfiguration(config_files)
-        except ConfigError, exc:
+        except ConfigError as exc:
             self._error(str(exc))
         else:
             try:
                 self._applyConfigurationToValues(self._parser, config, values)
-            except ConfigError, exc:
+            except ConfigError as exc:
                 self._error(str(exc))
         return self._parser.parse_args(args, values)
 
 
 class Config(object):
-    """nose configuration.
-
+    r"""nose configuration.
     Instances of Config are used throughout nose to configure
     behavior, including plugin lists. Here are the default values for
-    all config keys::
-
+    all config keys:
       self.env = env = kw.pop('env', {})
       self.args = ()
       self.testMatch = re.compile(r'(?:^|[\\b_\\.%s-])[Tt]est' % os.sep)
@@ -174,8 +165,7 @@ class Config(object):
       self.verbosity = int(env.get('NOSE_VERBOSE', 1))
       self.where = ()
       self.py3where = ()
-      self.workingDir = None
-    """
+      self.workingDir = None """
 
     def __init__(self, **kw):
         self.env = env = kw.pop('env', {})
@@ -195,7 +185,9 @@ class Config(object):
                                           r'^_',
                                           r'^setup\.py$',
                                           ]
-        self.ignoreFiles = map(re.compile, self.ignoreFilesDefaultStrings)
+        self.ignoreFiles = list(
+            map(re.compile, self.ignoreFilesDefaultStrings)
+        )
         self.include = None
         self.loggingConfig = None
         self.logStream = sys.stderr
@@ -215,7 +207,6 @@ class Config(object):
         self.firstPackageWins = False
         self.parserClass = OptionParser
         self.worker = False
-
         self._default = self.__dict__.copy()
         self.update(kw)
         self._orig = self.__dict__.copy()
@@ -227,7 +218,6 @@ class Config(object):
         del state['_default']
         del state['env']
         del state['logStream']
-        # FIXME remove plugins, have only plugin manager class
         state['plugins'] = self.plugins.__class__
         return state
 
@@ -235,10 +225,8 @@ class Config(object):
         plugincls = state.pop('plugins')
         self.update(state)
         self.worker = True
-        # FIXME won't work for static plugin lists
         self.plugins = plugincls()
         self.plugins.loadPlugins()
-        # needed so .can_configure gets set appropriately
         dummy_parser = self.parserClass()
         self.plugins.addOptions(dummy_parser, {})
         self.plugins.configure(self.options, self)
@@ -247,20 +235,24 @@ class Config(object):
         d = self.__dict__.copy()
         # don't expose env, could include sensitive info
         d['env'] = {}
-        keys = [ k for k in d.keys()
-                 if not k.startswith('_') ]
+        keys = [k for k in list(d.keys()) if not k.startswith('_')]
         keys.sort()
-        return "Config(%s)" % ', '.join([ '%s=%r' % (k, d[k])
-                                          for k in keys ])
+        return "Config(%s)" % ', '.join(
+            ['%s=%r' % (k, d[k]) for k in keys]
+        )
     __str__ = __repr__
 
     def _parseArgs(self, argv, cfg_files):
         def warn_sometimes(msg, name=None, filename=None):
-            if (hasattr(self.plugins, 'excludedOption') and
-                self.plugins.excludedOption(name)):
-                msg = ("Option %r in config file %r ignored: "
-                       "excluded by runtime environment" %
-                       (name, filename))
+            if (
+                hasattr(self.plugins, 'excludedOption')
+                and self.plugins.excludedOption(name)
+            ):
+                msg = (
+                    "Option %r in config file %r ignored: "
+                    "excluded by runtime environment" %
+                    (name, filename)
+                )
                 warn(msg, RuntimeWarning)
             else:
                 raise ConfigError(msg)
@@ -271,42 +263,32 @@ class Config(object):
     def configure(self, argv=None, doc=None):
         """Configure the nose running environment. Execute configure before
         collecting tests with nose.TestCollector to enable output capture and
-        other features.
-        """
+        other features."""
         env = self.env
         if argv is None:
             argv = sys.argv
-
         cfg_files = getattr(self, 'files', [])
         options, args = self._parseArgs(argv, cfg_files)
         # If -c --config has been specified on command line,
         # load those config files and reparse
         if getattr(options, 'files', []):
             options, args = self._parseArgs(argv, options.files)
-
         self.options = options
         if args:
             self.testNames = args
         if options.testNames is not None:
             self.testNames.extend(tolist(options.testNames))
-
         if options.py3where is not None:
             if sys.version_info >= (3,):
                 options.where = options.py3where
-
-        # `where` is an append action, so it can't have a default value
-        # in the parser, or that default will always be in the list
         if not options.where:
             options.where = env.get('NOSE_WHERE', None)
-
-        # include and exclude also
         if not options.ignoreFiles:
             options.ignoreFiles = env.get('NOSE_IGNORE_FILES', [])
         if not options.include:
             options.include = env.get('NOSE_INCLUDE', [])
         if not options.exclude:
             options.exclude = env.get('NOSE_EXCLUDE', [])
-
         self.addPaths = options.addPaths
         self.stopOnError = options.stopOnError
         self.verbosity = options.verbosity
@@ -317,30 +299,27 @@ class Config(object):
         self.loggingConfig = options.loggingConfig
         self.firstPackageWins = options.firstPackageWins
         self.configureLogging()
-
         if not options.byteCompile:
             sys.dont_write_bytecode = True
-
         if options.where is not None:
             self.configureWhere(options.where)
-
         if options.testMatch:
             self.testMatch = re.compile(options.testMatch)
-
         if options.ignoreFiles:
-            self.ignoreFiles = map(re.compile, tolist(options.ignoreFiles))
+            self.ignoreFiles = list(
+                map(re.compile, tolist(options.ignoreFiles))
+            )
             log.info("Ignoring files matching %s", options.ignoreFiles)
         else:
-            log.info("Ignoring files matching %s", self.ignoreFilesDefaultStrings)
-
+            log.info(
+                "Ignoring files matching %s", self.ignoreFilesDefaultStrings
+            )
         if options.include:
-            self.include = map(re.compile, tolist(options.include))
+            self.include = list(map(re.compile, tolist(options.include)))
             log.info("Including tests matching %s", options.include)
-
         if options.exclude:
-            self.exclude = map(re.compile, tolist(options.exclude))
+            self.exclude = list(map(re.compile, tolist(options.exclude)))
             log.info("Excluding tests matching %s", options.exclude)
-
         # When listing plugins we don't want to run them
         if not options.showPlugins:
             self.plugins.configure(options, self)
@@ -349,26 +328,20 @@ class Config(object):
     def configureLogging(self):
         """Configure logging for nose, or optionally other packages. Any logger
         name may be set with the debug option, and that logger will be set to
-        debug level and be assigned the same handler as the nose loggers, unless
-        it already has a handler.
-        """
+        debug level and be assigned the same handler as the nose loggers,
+        unless it already has a handler."""
         if self.loggingConfig:
             from logging.config import fileConfig
             fileConfig(self.loggingConfig)
             return
-
         format = logging.Formatter('%(name)s: %(levelname)s: %(message)s')
         if self.debugLog:
             handler = logging.FileHandler(self.debugLog)
         else:
             handler = logging.StreamHandler(self.logStream)
         handler.setFormatter(format)
-
         logger = logging.getLogger('nose')
         logger.propagate = 0
-
-        # only add our default handler if there isn't already one there
-        # this avoids annoying duplicate log messages.
         found = False
         if self.debugLog:
             debugLogAbsPath = os.path.abspath(self.debugLog)
@@ -383,8 +356,6 @@ class Config(object):
                     found = True
         if not found:
             logger.addHandler(handler)
-
-        # default level
         lvl = logging.WARNING
         if self.verbosity >= 5:
             lvl = 0
@@ -393,21 +364,16 @@ class Config(object):
         elif self.verbosity >= 3:
             lvl = logging.INFO
         logger.setLevel(lvl)
-
-        # individual overrides
         if self.debug:
-            # no blanks
-            debug_loggers = [ name for name in self.debug.split(',')
-                              if name ]
+            debug_loggers = [name for name in self.debug.split(',') if name]
             for logger_name in debug_loggers:
-                l = logging.getLogger(logger_name)
-                l.setLevel(logging.DEBUG)
-                if not l.handlers and not logger_name.startswith('nose'):
-                    l.addHandler(handler)
+                line = logging.getLogger(logger_name)
+                line.setLevel(logging.DEBUG)
+                if not line.handlers and not logger_name.startswith('nose'):
+                    line.addHandler(handler)
 
     def configureWhere(self, where):
-        """Configure the working directory or directories for the test run.
-        """
+        """Configure the working directory or directories for the test run."""
         from nose.importer import add_path
         self.workingDir = None
         where = tolist(where)
@@ -420,10 +386,14 @@ class Config(object):
                                      "not a directory" % path)
                 log.info("Set working dir to %s", abs_path)
                 self.workingDir = abs_path
-                if self.addPaths and \
-                       os.path.exists(os.path.join(abs_path, '__init__.py')):
-                    log.info("Working directory %s is a package; "
-                             "adding to sys.path" % abs_path)
+                if (
+                    self.addPaths
+                    and os.path.exists(os.path.join(abs_path, '__init__.py'))
+                ):
+                    log.info(
+                        "Working directory %s is a package; "
+                        "adding to sys.path" % abs_path
+                    )
                     add_path(abs_path)
                 continue
             if not warned:
@@ -437,45 +407,48 @@ class Config(object):
             self.testNames.append(path)
 
     def default(self):
-        """Reset all config values to defaults.
-        """
+        """Reset all config values to defaults."""
         self.__dict__.update(self._default)
 
     def getParser(self, doc=None):
-        """Get the command line option parser.
-        """
+        """Get the command line option parser."""
         if self.parser:
             return self.parser
-        env = self.env
         parser = self.parserClass(doc)
         parser.add_option(
-            "-V","--version", action="store_true",
+            "-V", "--version", action="store_true",
             dest="version", default=False,
-            help="Output nose version and exit")
+            help="Output nose version and exit"
+        )
         parser.add_option(
             "-p", "--plugins", action="store_true",
             dest="showPlugins", default=False,
             help="Output list of available plugins and exit. Combine with "
-            "higher verbosity for greater detail")
+            "higher verbosity for greater detail"
+        )
         parser.add_option(
             "-v", "--verbose",
             action="count", dest="verbosity",
             default=self.verbosity,
-            help="Be more verbose. [NOSE_VERBOSE]")
+            help="Be more verbose. [NOSE_VERBOSE]"
+        )
         parser.add_option(
             "--verbosity", action="store", dest="verbosity",
             metavar='VERBOSITY',
             type="int", help="Set verbosity; --verbosity=2 is "
-            "the same as -v")
+            "the same as -v"
+        )
         parser.add_option(
             "-q", "--quiet", action="store_const", const=0, dest="verbosity",
-            help="Be less verbose")
+            help="Be less verbose"
+        )
         parser.add_option(
             "-c", "--config", action="append", dest="files",
             metavar="FILES",
             help="Load configuration from config file(s). May be specified "
             "multiple times; in that case, all config files will be "
-            "loaded and combined")
+            "loaded and combined"
+        )
         parser.add_option(
             "-w", "--where", action="append", dest="where",
             metavar="WHERE",
@@ -484,7 +457,7 @@ class Config(object):
             "will be used as the working directory, in place of the current "
             "working directory, which is the default. Others will be added "
             "to the list of tests to execute. [NOSE_WHERE]"
-            )
+        )
         parser.add_option(
             "--py3where", action="append", dest="py3where",
             metavar="PY3WHERE",
@@ -494,21 +467,23 @@ class Config(object):
             "option completely replaces any directories specified with "
             "'where', so the 'where' option becomes ineffective. "
             "[NOSE_PY3WHERE]"
-            )
+        )
         parser.add_option(
             "-m", "--match", "--testmatch", action="store",
             dest="testMatch", metavar="REGEX",
             help="Files, directories, function names, and class names "
             "that match this regular expression are considered tests.  "
             "Default: %s [NOSE_TESTMATCH]" % self.testMatchPat,
-            default=self.testMatchPat)
+            default=self.testMatchPat
+        )
         parser.add_option(
             "--tests", action="store", dest="testNames", default=None,
             metavar='NAMES',
             help="Run these tests (comma-separated list). This argument is "
             "useful mainly from configuration files; on the command line, "
             "just pass the tests to run as additional arguments with no "
-            "switch.")
+            "switch."
+        )
         parser.add_option(
             "-l", "--debug", action="store",
             dest="debug", default=self.debug,
@@ -520,13 +495,15 @@ class Config(object):
             "--debug-log", dest="debugLog", action="store",
             default=self.debugLog, metavar="FILE",
             help="Log debug messages to this file "
-            "(default: sys.stderr)")
+            "(default: sys.stderr)"
+        )
         parser.add_option(
             "--logging-config", "--log-config",
             dest="loggingConfig", action="store",
             default=self.loggingConfig, metavar="FILE",
             help="Load logging config from this file -- bypasses all other"
-            " logging config settings.")
+            " logging config settings."
+        )
         parser.add_option(
             "-I", "--ignore-files", action="append", dest="ignoreFiles",
             metavar="REGEX",
@@ -535,12 +512,14 @@ class Config(object):
             "plugins. "
             "Specifying this option will replace the default setting. "
             "Specify this option multiple times "
-            "to add more regular expressions [NOSE_IGNORE_FILES]")
+            "to add more regular expressions [NOSE_IGNORE_FILES]"
+        )
         parser.add_option(
             "-e", "--exclude", action="append", dest="exclude",
             metavar="REGEX",
             help="Don't run tests that match regular "
-            "expression [NOSE_EXCLUDE]")
+            "expression [NOSE_EXCLUDE]"
+        )
         parser.add_option(
             "-i", "--include", action="append", dest="include",
             metavar="REGEX",
@@ -548,29 +527,34 @@ class Config(object):
             "directories, function names, and class names for a chance "
             "to include additional tests that do not match TESTMATCH.  "
             "Specify this option multiple times "
-            "to add more regular expressions [NOSE_INCLUDE]")
+            "to add more regular expressions [NOSE_INCLUDE]"
+        )
         parser.add_option(
             "-x", "--stop", action="store_true", dest="stopOnError",
             default=self.stopOnError,
-            help="Stop running tests after the first error or failure")
+            help="Stop running tests after the first error or failure"
+        )
         parser.add_option(
             "-P", "--no-path-adjustment", action="store_false",
             dest="addPaths",
             default=self.addPaths,
             help="Don't make any changes to sys.path when "
-            "loading tests [NOSE_NOPATH]")
+            "loading tests [NOSE_NOPATH]"
+        )
         parser.add_option(
             "--exe", action="store_true", dest="includeExe",
             default=self.includeExe,
             help="Look for tests in python modules that are "
             "executable. Normal behavior is to exclude executable "
             "modules, since they may not be import-safe "
-            "[NOSE_INCLUDE_EXE]")
+            "[NOSE_INCLUDE_EXE]"
+        )
         parser.add_option(
             "--noexe", action="store_false", dest="includeExe",
             help="DO NOT look for tests in python modules that are "
             "executable. (The default on the windows platform is to "
-            "do so.)")
+            "do so.)"
+        )
         parser.add_option(
             "--traverse-namespace", action="store_true",
             default=self.traverseNamespace, dest="traverseNamespace",
@@ -580,12 +564,14 @@ class Config(object):
             action="store_true", default=False, dest="firstPackageWins",
             help="nose's importer will normally evict a package from sys."
             "modules if it sees a package with the same name in a different "
-            "location. Set this option to disable that behavior.")
+            "location. Set this option to disable that behavior."
+        )
         parser.add_option(
             "--no-byte-compile",
             action="store_false", default=True, dest="byteCompile",
             help="Prevent nose from byte-compiling the source into .pyc files "
-            "while nose is scanning for and running tests.")
+            "while nose is scanning for and running tests."
+        )
 
         self.plugins.loadPlugins()
         self.pluginOpts(parser)
@@ -594,8 +580,7 @@ class Config(object):
         return parser
 
     def help(self, doc=None):
-        """Return the generated help message
-        """
+        """Return the generated help message"""
         return self.getParser(doc).format_help()
 
     def pluginOpts(self, parser):
@@ -612,8 +597,7 @@ class Config(object):
 
 
 class NoOptions(object):
-    """Options container that returns None for all options.
-    """
+    """Options container that returns None for all options."""
     def __getstate__(self):
         return {}
 
@@ -623,21 +607,20 @@ class NoOptions(object):
     def __getnewargs__(self):
         return ()
 
-    def __nonzero__(self):
+    def __bool__(self):
         return False
 
 
 def user_config_files():
-    """Return path to any existing user config files
-    """
-    return filter(os.path.exists,
-                  map(os.path.expanduser, config_files))
+    """Return path to any existing user config files"""
+    return list(
+        filter(os.path.exists, list(map(os.path.expanduser, config_files)))
+    )
 
 
 def all_config_files():
     """Return path to any existing user config files, plus any setup.cfg
-    in the current working directory.
-    """
+    in the current working directory."""
     user = user_config_files()
     if os.path.exists('setup.cfg'):
         return user + ['setup.cfg']

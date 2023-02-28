@@ -97,37 +97,31 @@ Examples using the ``-A`` and ``--eval-attr`` options:
   Evaluates the Python expression "not slow" and runs the test if True
 
 * ``nosetests -A "(priority > 5) and not slow"``
-  Evaluates a complex Python expression and runs the test if True
-
-"""
-import inspect
+  Evaluates a complex Python expression and runs the test if True """
 import logging
-import os
-import sys
-from inspect import isfunction
 from nose.plugins.base import Plugin
 from nose.util import tolist
+import collections
 
 log = logging.getLogger('nose.plugins.attrib')
-compat_24 = sys.version_info >= (2, 4)
+
 
 def attr(*args, **kwargs):
     """Decorator that adds attributes to classes or functions
-    for use with the Attribute (-a) plugin.
-    """
+    for use with the Attribute (-a) plugin."""
     def wrap_ob(ob):
         for name in args:
             setattr(ob, name, True)
-        for name, value in kwargs.iteritems():
+        for name, value in kwargs.items():
             setattr(ob, name, value)
         return ob
     return wrap_ob
 
-def get_method_attr(method, cls, attr_name, default = False):
-    """Look up an attribute on a method/ function. 
+
+def get_method_attr(method, cls, attr_name, default=False):
+    """Look up an attribute on a method/ function.
     If the attribute isn't found there, looking it up in the
-    method's class, if any.
-    """
+    method's class, if any."""
     Missing = object()
     value = getattr(method, attr_name, Missing)
     if value is Missing and cls is not None:
@@ -139,8 +133,7 @@ def get_method_attr(method, cls, attr_name, default = False):
 
 class ContextHelper:
     """Object that can act as context dictionary for eval and looks up
-    names as attributes on a method/ function and its class. 
-    """
+    names as attributes on a method/ function and its class."""
     def __init__(self, method, cls):
         self.method = method
         self.cls = cls
@@ -150,9 +143,7 @@ class ContextHelper:
 
 
 class AttributeSelector(Plugin):
-    """Selects test cases to be run based on their attributes.
-    """
-
+    """Selects test cases to be run based on their attributes."""
     def __init__(self):
         Plugin.__init__(self)
         self.attribs = []
@@ -165,14 +156,12 @@ class AttributeSelector(Plugin):
                           metavar="ATTR",
                           help="Run only tests that have attributes "
                           "specified by ATTR [NOSE_ATTR]")
-        # disable in < 2.4: eval can't take needed args
-        if compat_24:
-            parser.add_option("-A", "--eval-attr",
-                              dest="eval_attr", metavar="EXPR", action="append",
-                              default=env.get('NOSE_EVAL_ATTR'),
-                              help="Run only tests for whose attributes "
-                              "the Python expression EXPR evaluates "
-                              "to True [NOSE_EVAL_ATTR]")
+        parser.add_option("-A", "--eval-attr",
+                          dest="eval_attr", metavar="EXPR", action="append",
+                          default=env.get('NOSE_EVAL_ATTR'),
+                          help="Run only tests for whose attributes "
+                          "the Python expression EXPR evaluates "
+                          "to True [NOSE_EVAL_ATTR]")
 
     def configure(self, options, config):
         """Configure the plugin and system, based on selected options.
@@ -181,12 +170,11 @@ class AttributeSelector(Plugin):
 
         self.attribs will be a list of lists of tuples. In that list, each
         list is a group of attributes, all of which must match for the rule to
-        match.
-        """
+        match."""
         self.attribs = []
 
         # handle python eval-expression parameter
-        if compat_24 and options.eval_attr:
+        if options.eval_attr:
             eval_attr = tolist(options.eval_attr)
             for attr in eval_attr:
                 # "<python expression>"
@@ -227,18 +215,16 @@ class AttributeSelector(Plugin):
         if self.attribs:
             self.enabled = True
 
-    def validateAttrib(self, method, cls = None):
+    def validateAttrib(self, method, cls=None):
         """Verify whether a method has the required attributes
         The method is considered a match if it matches all attributes
-        for any attribute group.
-        ."""
-        # TODO: is there a need for case-sensitive value comparison?
+        for any attribute group."""
         any = False
         for group in self.attribs:
             match = True
             for key, value in group:
                 attr = get_method_attr(method, cls, key)
-                if callable(value):
+                if isinstance(value, collections.Callable):
                     if not value(key, method, cls):
                         match = False
                         break
@@ -260,8 +246,10 @@ class AttributeSelector(Plugin):
                         break
                 else:
                     # value must match, convert to string and compare
-                    if (value != attr
-                        and str(value).lower() != str(attr).lower()):
+                    if (
+                        value != attr
+                        and str(value).lower() != str(attr).lower()
+                    ):
                         match = False
                         break
             any = any or match
@@ -272,15 +260,13 @@ class AttributeSelector(Plugin):
         return False
 
     def wantFunction(self, function):
-        """Accept the function if its attributes match.
-        """
+        """Accept the function if its attributes match."""
         return self.validateAttrib(function)
 
     def wantMethod(self, method):
-        """Accept the method if its attributes match.
-        """
+        """Accept the method if its attributes match."""
         try:
-            cls = method.im_class
+            cls = method.__self__.__class__
         except AttributeError:
             return False
         return self.validateAttrib(method, cls)

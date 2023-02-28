@@ -1,14 +1,9 @@
 """
 Test Suites
 -----------
-
 Provides a LazySuite, which is a suite whose test list is a generator
 function, and ContextSuite,which can run fixtures (setup/teardown
-functions or methods) for the context that contains its tests.
-
-"""
-from __future__ import generators
-
+functions or methods) for the context that contains its tests."""
 import logging
 import sys
 import unittest
@@ -16,6 +11,7 @@ from nose.case import Test
 from nose.config import Config
 from nose.proxy import ResultProxyFactory
 from nose.util import isclass, resolve_name, try_run
+import collections
 
 if sys.platform == 'cli':
     if sys.version_info[:2] < (2, 6):
@@ -25,30 +21,20 @@ if sys.platform == 'cli':
     else:
         class StringException(Exception):
             pass
-
 log = logging.getLogger(__name__)
-#log.setLevel(logging.DEBUG)
-
-# Singleton for default value -- see ContextSuite.__init__ below
 _def = object()
 
 
 def _strclass(cls):
     return "%s.%s" % (cls.__module__, cls.__name__)
 
+
 class MixedContextError(Exception):
-    """Error raised when a context suite sees tests from more than
-    one context.
-    """
     pass
 
 
 class LazySuite(unittest.TestSuite):
-    """A suite that may use a generator as its list of tests
-    """
     def __init__(self, tests=()):
-        """Initialize the suite. tests may be an iterable or a generator
-        """
         super(LazySuite, self).__init__()
         self._set_tests(tests)
 
@@ -67,7 +53,6 @@ class LazySuite(unittest.TestSuite):
     def addTest(self, test):
         self._precache.append(test)
 
-    # added to bypass run changes in 2.7's unittest
     def run(self, result):
         for test in self._tests:
             if result.shouldStop:
@@ -75,14 +60,14 @@ class LazySuite(unittest.TestSuite):
             test(result)
         return result
 
-    def __nonzero__(self):
+    def __bool__(self):
         log.debug("tests in %s?", id(self))
         if self._precache:
             return True
         if self.test_generator is None:
             return False
         try:
-            test = self.test_generator.next()
+            test = next(self.test_generator)
             if test is not None:
                 self._precache.append(test)
                 return True
@@ -102,11 +87,9 @@ class LazySuite(unittest.TestSuite):
     def _set_tests(self, tests):
         self._precache = []
         is_suite = isinstance(tests, unittest.TestSuite)
-        if callable(tests) and not is_suite:
+        if isinstance(tests, collections.Callable) and not is_suite:
             self.test_generator = tests()
         elif is_suite:
-            # Suites need special treatment: they must be called like
-            # tests for their setup/teardown to run (if any)
             self.addTests([tests])
             self.test_generator = None
         else:
@@ -120,19 +103,16 @@ class LazySuite(unittest.TestSuite):
 
 class ContextSuite(LazySuite):
     """A suite with context.
-
     A ContextSuite executes fixtures (setup and teardown functions or
     methods) for the context containing its tests.
-
     The context may be explicitly passed. If it is not, a context (or
     nested set of contexts) will be constructed by examining the tests
-    in the suite.
-    """
+    in the suite."""
     failureException = unittest.TestCase.failureException
     was_setup = False
     was_torndown = False
     classSetup = ('setup_class', 'setup_all', 'setupClass', 'setupAll',
-                     'setUpClass', 'setUpAll')
+                  'setUpClass', 'setUpAll')
     classTeardown = ('teardown_class', 'teardown_all', 'teardownClass',
                      'teardownAll', 'tearDownClass', 'tearDownAll')
     moduleSetup = ('setup_module', 'setupModule', 'setUpModule', 'setup',
@@ -172,35 +152,24 @@ class ContextSuite(LazySuite):
     def __hash__(self):
         return object.__hash__(self)
 
-    # 2.3 compat -- force 2.4 call sequence
     def __call__(self, *arg, **kw):
         return self.run(*arg, **kw)
 
     def exc_info(self):
-        """Hook for replacing error tuple output
-        """
         return sys.exc_info()
 
     def _exc_info(self):
-        """Bottleneck to fix up IronPython string exceptions
-        """
         e = self.exc_info()
         if sys.platform == 'cli':
             if isinstance(e[0], StringException):
-                # IronPython throws these StringExceptions, but
-                # traceback checks type(etype) == str. Make a real
-                # string here.
                 e = (str(e[0]), e[1], e[2])
-
         return e
 
     def run(self, result):
-        """Run tests in suite inside of suite fixtures.
-        """
-        # proxy the result for myself
-        log.debug("suite %s (%s) run called, tests: %s", id(self), self, self._tests)
-        #import pdb
-        #pdb.set_trace()
+        """Run tests in suite inside of suite fixtures."""
+        log.debug(
+            "suite %s (%s) run called, tests: %s", id(self), self, self._tests
+        )
         if self.resultProxy:
             result, orig = self.resultProxy(result, self), result
         else:
@@ -209,7 +178,7 @@ class ContextSuite(LazySuite):
             self.setUp()
         except KeyboardInterrupt:
             raise
-        except:
+        except Exception:
             self.error_context = 'setup'
             result.addError(self, self._exc_info())
             return
@@ -218,9 +187,6 @@ class ContextSuite(LazySuite):
                 if result.shouldStop:
                     log.debug("stopping")
                     break
-                # each nose.case.Test will create its own result proxy
-                # so the cases need the original result, to avoid proxy
-                # chains
                 test(orig)
         finally:
             self.has_run = True
@@ -228,7 +194,7 @@ class ContextSuite(LazySuite):
                 self.tearDown()
             except KeyboardInterrupt:
                 raise
-            except:
+            except Exception:
                 self.error_context = 'teardown'
                 result.addError(self, self._exc_info())
 
@@ -238,13 +204,13 @@ class ContextSuite(LazySuite):
             return False
         if self.implementsAnyFixture(context, ctx_callback=ctx_callback):
             return True
-        # My context doesn't have any, but its ancestors might
         factory = self.factory
         if factory:
             ancestors = factory.context.get(self, [])
             for ancestor in ancestors:
                 if self.implementsAnyFixture(
-                    ancestor, ctx_callback=ctx_callback):
+                    ancestor, ctx_callback=ctx_callback
+                ):
                     return True
         return False
 
@@ -255,7 +221,6 @@ class ContextSuite(LazySuite):
             names = self.moduleSetup + self.moduleTeardown
             if hasattr(context, '__path__'):
                 names += self.packageSetup + self.packageTeardown
-        # If my context has any fixture attribute, I have fixtures
         fixt = False
         for m in names:
             if hasattr(context, m):
@@ -268,7 +233,6 @@ class ContextSuite(LazySuite):
     def setUp(self):
         log.debug("suite %s setUp called, tests: %s", id(self), self._tests)
         if not self:
-            # I have no tests
             log.debug("suite %s has no tests", id(self))
             return
         if self.was_setup:
@@ -277,11 +241,8 @@ class ContextSuite(LazySuite):
         context = self.context
         if context is None:
             return
-        # before running my own context's setup, I need to
-        # ask the factory if my context's contexts' setups have been run
         factory = self.factory
         if factory:
-            # get a copy, since we'll be destroying it as we go
             ancestors = factory.context.get(self, [])[:]
             while ancestors:
                 ancestor = ancestors.pop()
@@ -290,7 +251,7 @@ class ContextSuite(LazySuite):
                     continue
                 log.debug("ancestor %s does need setup", ancestor)
                 self.setupContext(ancestor)
-            if not context in factory.was_setup:
+            if context not in factory.was_setup:
                 self.setupContext(context)
         else:
             self.setupContext(context)
@@ -303,8 +264,6 @@ class ContextSuite(LazySuite):
         if self.factory:
             if context in self.factory.was_setup:
                 return
-            # note that I ran the setup for this context, so that I'll run
-            # the teardown in my teardown
             self.factory.was_setup[context] = self
         if isclass(context):
             names = self.classSetup
@@ -331,15 +290,12 @@ class ContextSuite(LazySuite):
         if context is None:
             log.debug("No context to tear down")
             return
-
-        # for each ancestor... if the ancestor was setup
-        # and I did the setup, I can do teardown
         factory = self.factory
         if factory:
             ancestors = factory.context.get(self, []) + [context]
             for ancestor in ancestors:
                 log.debug('ancestor %s may need teardown', ancestor)
-                if not ancestor in factory.was_setup:
+                if ancestor not in factory.was_setup:
                     log.debug('ancestor %s was not setup', ancestor)
                     continue
                 if ancestor in factory.was_torndown:
@@ -367,7 +323,6 @@ class ContextSuite(LazySuite):
         try_run(context, names)
         self.config.plugins.stopContext(context)
 
-    # FIXME the wrapping has to move to the factory?
     def _get_wrapped_tests(self):
         for test in self._get_tests():
             if isinstance(test, Test) or isinstance(test, unittest.TestSuite):
@@ -387,17 +342,15 @@ class ContextSuiteFactory(object):
     the factory decides on a hierarchy of contexts by introspecting
     the collection or the tests themselves to find the objects
     containing the test objects. It always returns one suite, but that
-    suite may consist of a hierarchy of nested suites.
-    """
+    suite may consist of a hierarchy of nested suites."""
     suiteClass = ContextSuite
+
     def __init__(self, config=None, suiteClass=None, resultProxy=_def):
         if config is None:
             config = Config()
         self.config = config
         if suiteClass is not None:
             self.suiteClass = suiteClass
-        # Using a singleton to represent default instead of None allows
-        # passing resultProxy=None to turn proxying off.
         if resultProxy is _def:
             resultProxy = ResultProxyFactory(config=config)
         self.resultProxy = resultProxy
@@ -413,8 +366,7 @@ class ContextSuiteFactory(object):
         iterable. In that case the tests will wrapped in
         nose.case.Test, be examined and the context of each found and a
         suite of suites returned, organized into a stack with the
-        outermost suites belonging to the outermost contexts.
-        """
+        outermost suites belonging to the outermost contexts."""
         log.debug("Create suite for %s", tests)
         context = kw.pop('context', getattr(tests, 'context', None))
         log.debug("tests %s context %s", tests, context)
@@ -430,16 +382,12 @@ class ContextSuiteFactory(object):
         """Return the ancestry of the context (that is, all of the
         packages and modules containing the context), in order of
         descent with the outermost ancestor last.
-        This method is a generator.
-        """
+        This method is a generator."""
         log.debug("get ancestry %s", context)
         if context is None:
             return
-        # Methods include reference to module they are defined in, we
-        # don't want that, instead want the module the class is in now
-        # (classes are re-ancestored elsewhere).
         if hasattr(context, 'im_class'):
-            context = context.im_class
+            context = context.__self__.__class__
         elif hasattr(context, '__self__'):
             context = context.__self__.__class__
         if hasattr(context, '__module__'):
@@ -454,11 +402,13 @@ class ContextSuiteFactory(object):
             ancestors.pop()
 
     def findContext(self, tests):
-        if callable(tests) or isinstance(tests, unittest.TestSuite):
+        if (
+            isinstance(tests, collections.Callable)
+            or isinstance(tests, unittest.TestSuite)
+        ):
             return None
         context = None
         for test in tests:
-            # Don't look at suites for contexts, only tests
             ctx = getattr(test, 'context', None)
             if ctx is None:
                 continue
@@ -499,21 +449,20 @@ class ContextSuiteFactory(object):
         point if any tests remain, recurse with those tests as the
         input, returning a list of the common suite (which may be the
         suite or test we started with, if no common tests were found)
-        plus the results of recursion.
-        """
+        plus the results of recursion."""
         if not tests:
             return []
         head = tests.pop(0)
         if not tests:
-            return [head] # short circuit when none are left to combine
-        suite = head # the common ancestry suite, so far
+            return [head]
+        suite = head
         tail = tests[:]
         context = getattr(head, 'context', None)
         if context is not None:
             ancestors = [context] + [a for a in self.ancestry(context)]
             for ancestor in ancestors:
-                common = [suite] # tests with ancestor in common, so far
-                remain = [] # tests that remain to be processed
+                common = [suite]
+                remain = []
                 for test in tail:
                     found_common = False
                     test_ctx = getattr(test, 'context', None)
@@ -537,7 +486,10 @@ class ContextSuiteFactory(object):
 
     def wrapTests(self, tests):
         log.debug("wrap %s", tests)
-        if callable(tests) or isinstance(tests, unittest.TestSuite):
+        if (
+            isinstance(tests, collections.Callable)
+            or isinstance(tests, unittest.TestSuite)
+        ):
             log.debug("I won't wrap")
             return tests
         wrapped = []
@@ -549,16 +501,19 @@ class ContextSuiteFactory(object):
                 wrapped.append(self.makeSuite(test, context=test.context))
             else:
                 wrapped.append(
-                    Test(test, config=self.config, resultProxy=self.resultProxy)
+                    Test(
+                        test,
+                        config=self.config,
+                        resultProxy=self.resultProxy
                     )
+                )
         return wrapped
 
 
 class ContextList(object):
     """Not quite a suite -- a group of tests in a context. This is used
     to hint the ContextSuiteFactory about what context the tests
-    belong to, in cases where it may be ambiguous or missing.
-    """
+    belong to, in cases where it may be ambiguous or missing."""
     def __init__(self, tests, context=None):
         self.tests = tests
         self.context = context
@@ -571,8 +526,7 @@ class FinalizingSuiteWrapper(unittest.TestSuite):
     """Wraps suite and calls final function after suite has
     executed. Used to call final functions in cases (like running in
     the standard test runner) where test running is not under nose's
-    control.
-    """
+    control."""
     def __init__(self, suite, finalize):
         super(FinalizingSuiteWrapper, self).__init__()
         self.suite = suite
@@ -581,7 +535,6 @@ class FinalizingSuiteWrapper(unittest.TestSuite):
     def __call__(self, *arg, **kw):
         return self.run(*arg, **kw)
 
-    # 2.7 compat
     def __iter__(self):
         return iter(self.suite)
 
@@ -592,7 +545,6 @@ class FinalizingSuiteWrapper(unittest.TestSuite):
             self.finalize(*arg, **kw)
 
 
-# backwards compat -- sort of
 class TestDir:
     def __init__(*arg, **kw):
         raise NotImplementedError(
